@@ -142,6 +142,7 @@ providers:
 - 2025-07-20: Phase 1 completed - Project structure, database, and base classes created
 - 2025-07-20: Basic UI window and polling engine implemented
 - 2025-07-20: OpenAI provider adapter created (needs real API endpoint testing)
+- 2025-07-21: Enhanced OpenRouter card to display all available API information
 - 2025-07-20: Tested with real API endpoints - discovered actual API structures
 - 2025-07-20: Implemented Claude Code JSONL reader for Anthropic usage data
 - 2025-07-20: Created simplified synchronous version to avoid async/Qt issues
@@ -151,6 +152,12 @@ providers:
 - 2025-07-20: Implemented background threading for JSONL file reading
 - 2025-07-21: Enhanced UI with "Waiting for API reset" messages for rate limits
 - 2025-07-21: Added weekly bar chart visualization for OpenAI usage history
+- 2025-07-21: Implemented SQLite caching for OpenAI historical data
+- 2025-07-21: Fixed Claude Code session time to use actual session start
+- 2025-07-21: Updated all costs to show 4 decimal precision
+- 2025-07-21: Removed seconds from time display for cleaner UI
+- 2025-07-21: Fixed bar chart ordering to show chronological progression
+- 2025-07-21: Created initial git repository and commit
 
 ## Current Status
 - ✅ Project structure and dependencies
@@ -168,6 +175,10 @@ providers:
 - ✅ Background threading for file operations
 - ✅ API rate limit handling with user-friendly messages
 - ✅ OpenAI weekly bar chart visualization
+- ✅ Database caching for historical data
+- ✅ 4 decimal precision for all costs
+- ✅ Clean time display without seconds
+- ✅ Chronological bar chart ordering
 - ⏳ Additional graphs and detailed views
 - ⏳ Settings and configuration UI
 
@@ -186,6 +197,7 @@ python test_run.py
 ## Known Issues
 - Gemini API requires Google Cloud setup with monitoring/billing APIs
 - OpenAI API rate limits may cause "Waiting for API reset" messages
+- Google Cloud API filter syntax needs adjustment for Gemini metrics
 
 ## API Findings (2025-07-20)
 
@@ -237,9 +249,13 @@ This version:
 - Shows Claude Code session with live time/token tracking
 - Displays "Claude Code: Max20x" with cleaner UI
 - Shows "Waiting for API reset" for rate-limited providers
-- OpenAI card includes 7-day bar chart of usage history
+- OpenAI card includes 7-day bar chart of usage history (chronologically ordered)
+- Caches OpenAI historical data in SQLite database
 - Predicts when tokens will run out with exact time
 - Shows when new Claude session starts
+- Time displays show hours and minutes only (no seconds)
+- All costs shown with 4 decimal precision (e.g., $0.0011)
+- OpenRouter shows all API information (usage limit, rate limits, free tier status)
 - Properly handles window closing without CPU spikes
 
 ### Original Version:
@@ -267,15 +283,22 @@ Note: The original version may lock up due to heavy JSONL processing.
 15. ✅ Implement background threading for file operations
 16. ✅ Add API rate limit handling with user messages
 17. ✅ Create OpenAI weekly bar chart component
-18. ⏳ Add additional graph/chart components
-19. ⏳ Add drill-down detail views
-20. ⏳ Create settings/configuration UI
-21. ⏳ Create modular provider widget system
-22. ⏳ Add data export functionality
-23. ⏳ Implement comprehensive error handling
-24. ⏳ Add logging and debugging features
-25. ⏳ Create packaging configuration for cross-platform
-26. ⏳ Write tests for core functionality
+18. ✅ Add SQLite caching for OpenAI historical data
+19. ✅ Fix session time calculation to use actual start
+20. ✅ Update cost display to 4 decimal precision
+21. ✅ Remove seconds from time display
+22. ✅ Sort bar chart chronologically
+23. ✅ Create initial git repository
+24. ✅ Display all OpenRouter API information
+25. ⏳ Add additional graph/chart components
+25. ⏳ Add drill-down detail views
+26. ⏳ Create settings/configuration UI
+27. ⏳ Create modular provider widget system
+28. ⏳ Add data export functionality
+29. ⏳ Implement comprehensive error handling
+30. ⏳ Add logging and debugging features
+31. ⏳ Create packaging configuration for cross-platform
+32. ⏳ Write tests for core functionality
 
 ## Project Structure
 ```
@@ -311,5 +334,6 @@ llm-costs/
 ├── requirements.txt
 ├── pyproject.toml
 ├── test_run.py                      # Test runner
-└── .gitignore
+├── .gitignore
+└── .git/                            # Git repository (initialized)
 ```

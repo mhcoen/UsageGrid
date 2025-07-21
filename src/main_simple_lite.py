@@ -19,6 +19,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from src.providers.claude_code_reader import ClaudeCodeReader
 from src.ui.claude_code_card import ClaudeCodeCard
 from src.ui.openai_card import OpenAICard
+from src.ui.openrouter_card import OpenRouterCard
 from src.utils.session_helper import find_session_start
 from src.core.cache_db import CacheDB
 
@@ -339,7 +340,7 @@ class LiteWindow(QMainWindow):
         self.provider_cards["anthropic"] = claude_card
         
         # OpenRouter - bottom left
-        openrouter_card = SimpleProviderCard("openrouter", "OpenRouter", "#8b5cf6")
+        openrouter_card = OpenRouterCard()
         self.provider_grid.addWidget(openrouter_card, 1, 0)
         self.provider_cards["openrouter"] = openrouter_card
         
@@ -403,8 +404,17 @@ class LiteWindow(QMainWindow):
                 
             # OpenRouter - pay-per-use (add to daily total)
             if self.api_keys["openrouter"]:
-                cost = self.fetch_openrouter_data()
-                self.provider_cards["openrouter"].update_display(cost, None, "Active" if cost > 0 else "No usage")
+                openrouter_data = self.fetch_openrouter_data()
+                cost = openrouter_data.get("usage", 0.0)
+                
+                # Build status string
+                status = "Active" if cost > 0 else "No usage"
+                self.provider_cards["openrouter"].update_display(cost, None, status)
+                
+                # Update detailed info
+                if hasattr(self.provider_cards["openrouter"], "update_detailed_info"):
+                    self.provider_cards["openrouter"].update_detailed_info(openrouter_data)
+                
                 # Note: OpenRouter shows total balance used, we'd need more logic for daily
                 # For now, exclude from daily total or add logic to track daily changes
             else:
@@ -773,7 +783,7 @@ class LiteWindow(QMainWindow):
             logger.error(f"Error fetching Gemini data: {e}")
             return -1
             
-    def fetch_openrouter_data(self) -> float:
+    def fetch_openrouter_data(self) -> dict:
         """Fetch OpenRouter usage data"""
         try:
             headers = {
@@ -792,13 +802,21 @@ class LiteWindow(QMainWindow):
             if response.status_code == 200:
                 data = response.json()
                 if "data" in data:
-                    return data["data"].get("usage", 0.0)
+                    api_data = data["data"]
+                    return {
+                        "usage": api_data.get("usage", 0.0),
+                        "limit": api_data.get("limit"),
+                        "limit_remaining": api_data.get("limit_remaining"),
+                        "is_free_tier": api_data.get("is_free_tier", False),
+                        "rate_limit": api_data.get("rate_limit", {}),
+                        "label": api_data.get("label", "")
+                    }
                     
-            return 0.0
+            return {"usage": 0.0, "limit": None, "is_free_tier": False}
             
         except Exception as e:
             logger.error(f"Error fetching OpenRouter data: {e}")
-            return 0.0
+            return {"usage": 0.0, "limit": None, "is_free_tier": False}
             
     def fetch_api_providers(self):
         """Fetch data from API-based providers only"""
@@ -831,8 +849,16 @@ class LiteWindow(QMainWindow):
             
             # OpenRouter
             if self.api_keys["openrouter"]:
-                cost = self.fetch_openrouter_data()
-                self.provider_cards["openrouter"].update_display(cost, None, "Active" if cost > 0 else "No usage")
+                openrouter_data = self.fetch_openrouter_data()
+                cost = openrouter_data.get("usage", 0.0)
+                
+                # Build status string
+                status = "Active" if cost > 0 else "No usage"
+                self.provider_cards["openrouter"].update_display(cost, None, status)
+                
+                # Update detailed info
+                if hasattr(self.provider_cards["openrouter"], "update_detailed_info"):
+                    self.provider_cards["openrouter"].update_detailed_info(openrouter_data)
             
             # Gemini
             if self.api_keys["gemini"]:
