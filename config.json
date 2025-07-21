@@ -1,0 +1,28 @@
+{
+  "claude_code": {
+    "subscription_plan": "max20",
+    "plans": {
+      "pro": {
+        "name": "Pro",
+        "monthly_cost": 20,
+        "session_token_limit": 19000,
+        "session_cost_limit": 18.00,
+        "display_name": "Claude Pro"
+      },
+      "max5": {
+        "name": "Max 5×",
+        "monthly_cost": 100,
+        "session_token_limit": 88000,
+        "session_cost_limit": 35.00,
+        "display_name": "Claude Max 5×"
+      },
+      "max20": {
+        "name": "Max 20×",
+        "monthly_cost": 200,
+        "session_token_limit": 220000,
+        "session_cost_limit": 140.00,
+        "display_name": "Claude Max 20×"
+      }
+    }
+  }
+}
