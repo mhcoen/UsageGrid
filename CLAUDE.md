@@ -165,14 +165,16 @@ providers:
 - ✅ Provider abstraction base class
 - ✅ Basic polling engine
 - ✅ Main UI window with provider cards
-- ✅ OpenAI adapter (tested with real API)
-- ✅ OpenRouter adapter (tested with real API)
+- ✅ OpenAI adapter with weekly bar chart visualization
+- ✅ OpenRouter adapter with detailed API information display
 - ✅ Anthropic adapter (via Claude Code JSONL reader)
 - ✅ Real-time polling with actual cost data
 - ✅ Claude Code enhanced card with session tracking
+- ✅ Custom provider widgets (OpenAI, OpenRouter, Claude Code)
+- ✅ SQLite caching for historical data
+- ✅ Background threading for file operations
 - ✅ Time/token progress bars with live updates
 - ✅ Token usage prediction and session timing
-- ✅ Background threading for file operations
 - ✅ API rate limit handling with user-friendly messages
 - ✅ OpenAI weekly bar chart visualization
 - ✅ Database caching for historical data

@@ -5,25 +5,38 @@ import json
 import os
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
+from typing import Dict, Any
 
-from PyQt6.QtWidgets import QFrame, QVBoxLayout, QHBoxLayout, QLabel, QProgressBar
+from PyQt6.QtWidgets import QLabel, QProgressBar, QFrame
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QFont
+from .base_card import BaseProviderCard
 
-# No longer need session_helper since we calculate session boundaries mathematically
 
-
-class ClaudeCodeCard(QFrame):
+class ClaudeCodeCard(BaseProviderCard):
     """Claude Code card with subscription and usage display"""
     
     def __init__(self):
-        super().__init__()
         self.config = self._load_config()
         self.session_start_time = None
         self.current_tokens = 0
         self.token_limit = 220000  # Default
         self.recent_token_rates = []  # Track token usage rate
-        self.setup_ui()
+        
+        # Get plan name for display
+        plan = self.config.get("claude_code", {}).get("subscription_plan", "max20")
+        plan_names = {
+            "pro": "Pro",
+            "max5": "Max5x",
+            "max20": "Max20x"
+        }
+        plan_display = plan_names.get(plan, "Max20x")
+        
+        super().__init__(
+            provider_name="anthropic",
+            display_name=f"Claude Code: {plan_display}",
+            color="#e16e3d"
+        )
         
         # Timer to update time remaining
         self.time_update_timer = QTimer()
@@ -53,56 +66,38 @@ class ClaudeCodeCard(QFrame):
             
         return default_config
         
-    def setup_ui(self):
-        """Setup the card UI"""
-        self.setFrameStyle(QFrame.Shape.Box)
-        self.setFixedSize(220, 280)  # Taller for additional info
+    def get_font_size(self) -> int:
+        """Get current font size for dynamic text"""
+        # Check if parent window has font scale
+        parent = self.window()
+        if parent and hasattr(parent, 'font_scale'):
+            return int(self.base_font_sizes['small'] * parent.font_scale)
+        return self.base_font_sizes['small']
         
-        # Main layout
-        layout = QVBoxLayout()
-        layout.setContentsMargins(15, 15, 15, 15)
-        layout.setSpacing(4)
-        
-        # Title with plan name
-        plan = self.config.get("claude_code", {}).get("subscription_plan", "max20")
-        
-        # Simple plan name mapping
-        plan_names = {
-            "pro": "Pro",
-            "max5": "Max5x",
-            "max20": "Max20x"
-        }
-        plan_display = plan_names.get(plan, "Max20x")
-        
-        self.title_label = QLabel(f"Claude Code: {plan_display}")
-        font = QFont()
-        font.setPointSize(14)
-        font.setBold(True)
-        self.title_label.setFont(font)
-        self.title_label.setStyleSheet("color: #333;")
-        layout.addWidget(self.title_label)
+    def setup_content(self):
+        """Setup Claude Code specific content"""
         
         # Token progress bar
         self.progress_bar = QProgressBar()
         self.progress_bar.setMaximum(100)
-        self.progress_bar.setMinimumHeight(20)
+        self.progress_bar.setMinimumHeight(18)
         self.progress_bar.setTextVisible(True)
         self.progress_bar.setFormat("%p% of token limit")
-        layout.addWidget(self.progress_bar)
+        self.layout.addWidget(self.progress_bar)
         
         # Token count
         self.token_label = QLabel("Tokens: -")
-        self.token_label.setStyleSheet("color: #666; font-size: 12px;")
-        layout.addWidget(self.token_label)
+        self.token_label.setStyleSheet(f"color: #666; font-size: {self.base_font_sizes['secondary']}px;")
+        self.layout.addWidget(self.token_label)
         
         # Time progress bar (session duration)
         self.time_label = QLabel("Session Time")
-        self.time_label.setStyleSheet("color: #666; font-size: 11px; margin-top: 8px;")
-        layout.addWidget(self.time_label)
+        self.time_label.setStyleSheet(f"color: #666; font-size: {self.base_font_sizes['small']}px; margin-top: 4px;")
+        self.layout.addWidget(self.time_label)
         
         self.time_progress_bar = QProgressBar()
         self.time_progress_bar.setMaximum(100)
-        self.time_progress_bar.setMinimumHeight(16)
+        self.time_progress_bar.setMinimumHeight(14)
         self.time_progress_bar.setTextVisible(True)
         self.time_progress_bar.setFormat("%p%")
         self.time_progress_bar.setStyleSheet("""
@@ -116,43 +111,32 @@ class ClaudeCodeCard(QFrame):
                 border-radius: 2px;
             }
         """)
-        layout.addWidget(self.time_progress_bar)
+        self.layout.addWidget(self.time_progress_bar)
         
         # Time remaining
         self.time_remaining_label = QLabel("Time left: -")
-        self.time_remaining_label.setStyleSheet("color: #666; font-size: 11px;")
-        layout.addWidget(self.time_remaining_label)
+        self.time_remaining_label.setStyleSheet(f"color: #666; font-size: {self.base_font_sizes['small']}px;")
+        self.layout.addWidget(self.time_remaining_label)
         
         # Prediction
         self.prediction_label = QLabel("Prediction: -")
-        self.prediction_label.setStyleSheet("color: #666; font-size: 11px;")
-        layout.addWidget(self.prediction_label)
+        self.prediction_label.setStyleSheet(f"color: #666; font-size: {self.base_font_sizes['small']}px;")
+        self.layout.addWidget(self.prediction_label)
         
         # New session info
         self.new_session_label = QLabel("")
-        self.new_session_label.setStyleSheet("color: #666; font-size: 11px;")
-        layout.addWidget(self.new_session_label)
+        self.new_session_label.setStyleSheet(f"color: #666; font-size: {self.base_font_sizes['small']}px;")
+        self.layout.addWidget(self.new_session_label)
         
-        # Status
-        self.status_label = QLabel("Checking...")
-        self.status_label.setStyleSheet("color: gray; margin-top: 8px;")
-        layout.addWidget(self.status_label)
-        
-        layout.addStretch()
-        self.setLayout(layout)
-        
-        # Card styling
-        self.setStyleSheet("""
-            ClaudeCodeCard {
-                background-color: white;
-                border: 2px solid #e16e3d;
-                border-radius: 10px;
-            }
-        """)
-        
-    def update_display(self, daily_cost: float, session_cost: float, tokens: int, is_active: bool, 
-                      session_start: datetime = None, initial_rate_data: list = None):
+    def update_display(self, data: Dict[str, Any]):
         """Update the display with usage data"""
+        # Extract data
+        daily_cost = data.get('daily_cost', 0.0)
+        session_cost = data.get('session_cost', 0.0)
+        tokens = data.get('tokens', 0)
+        is_active = data.get('is_active', False)
+        session_start = data.get('session_start')
+        initial_rate_data = data.get('initial_rate_data', [])
         # Get token limit from config
         plan = self.config.get("claude_code", {}).get("subscription_plan", "max20")
         plans = self.config.get("claude_code", {}).get("plans", {})
@@ -232,11 +216,9 @@ class ClaudeCodeCard(QFrame):
             
         # Update status
         if is_active:
-            self.status_label.setText("Active Session")
-            self.status_label.setStyleSheet("color: #28a745; margin-top: 8px;")
+            self.update_status("Active Session", "active")
         else:
-            self.status_label.setText("No active session")
-            self.status_label.setStyleSheet("color: gray; margin-top: 8px;")
+            self.update_status("No active session", "normal")
         
         # Update time display
         self.update_time_display()
@@ -249,7 +231,7 @@ class ClaudeCodeCard(QFrame):
         # If we have a session start time, use it
         if self.session_start_time:
             session_start = self.session_start_time
-            # Session ends 5 hours after it starts, on the hour
+            # Session ends exactly 5 hours after it starts
             session_end = session_start + timedelta(hours=5)
         else:
             # Fallback: calculate from current time
@@ -307,22 +289,42 @@ class ClaudeCodeCard(QFrame):
                 if time_until_limit < remaining:
                     # Will run out before session ends
                     self.prediction_label.setText(f"Tokens will run out: {time_str}")
-                    self.prediction_label.setStyleSheet("color: #ff6b35; font-size: 11px; font-weight: bold;")
+                    self.prediction_label.setStyleSheet(f"color: #ff6b35; font-size: {self.get_font_size()}px; font-weight: bold;")
                 else:
                     # Will run out after session ends
                     self.prediction_label.setText(f"Tokens will run out: {time_str}")
-                    self.prediction_label.setStyleSheet("color: #28a745; font-size: 11px;")
+                    self.prediction_label.setStyleSheet(f"color: #28a745; font-size: {self.get_font_size()}px;")
             else:
                 self.prediction_label.setText("Rate: Stable")
-                self.prediction_label.setStyleSheet("color: #666; font-size: 11px;")
+                self.prediction_label.setStyleSheet(f"color: #666; font-size: {self.get_font_size()}px;")
         else:
             self.prediction_label.setText("Prediction: Calculating...")
             self.prediction_label.setStyleSheet("color: #666; font-size: 11px;")
             
-        # Always show when new session starts
+        # Show when the next session starts (after current session ends)
         # Convert session_end (UTC) to local time for display
         from zoneinfo import ZoneInfo
         utc_session_end = session_end.replace(tzinfo=ZoneInfo('UTC'))
         local_session_end = utc_session_end.astimezone()
         new_session_time = local_session_end.strftime("%I:%M %p").lstrip('0')
-        self.new_session_label.setText(f"New session starts: {new_session_time}")
+        # Be clear that next session starts on the hour after current one ends
+        self.new_session_label.setText(f"Next session: {new_session_time}")
+        
+    def scale_content_fonts(self, scale: float):
+        """Scale Claude Code specific fonts"""
+        # Scale token label
+        self.token_label.setStyleSheet(f"color: #666; font-size: {int(self.base_font_sizes['secondary'] * scale)}px;")
+        
+        # Scale time labels
+        self.time_label.setStyleSheet(f"color: #666; font-size: {int(self.base_font_sizes['small'] * scale)}px; margin-top: 4px;")
+        self.time_remaining_label.setStyleSheet(f"color: #666; font-size: {int(self.base_font_sizes['small'] * scale)}px;")
+        self.new_session_label.setStyleSheet(f"color: #666; font-size: {int(self.base_font_sizes['small'] * scale)}px;")
+        
+        # Scale prediction label with special handling for its dynamic styling
+        current_style = self.prediction_label.styleSheet()
+        if "color: #ff6b35" in current_style:  # Orange warning
+            self.prediction_label.setStyleSheet(f"color: #ff6b35; font-size: {int(self.base_font_sizes['small'] * scale)}px; font-weight: bold;")
+        elif "color: #28a745" in current_style:  # Green
+            self.prediction_label.setStyleSheet(f"color: #28a745; font-size: {int(self.base_font_sizes['small'] * scale)}px;")
+        else:  # Default
+            self.prediction_label.setStyleSheet(f"color: #666; font-size: {int(self.base_font_sizes['small'] * scale)}px;")

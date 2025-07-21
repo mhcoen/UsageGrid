@@ -1,11 +1,12 @@
 """
 Enhanced OpenAI card with bar chart visualization
 """
-from PyQt6.QtWidgets import QFrame, QVBoxLayout, QHBoxLayout, QLabel, QWidget
-from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtWidgets import QLabel, QWidget
+from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QFont, QPainter, QColor, QPen, QBrush
-from datetime import datetime, timedelta
-from typing import Dict, Optional
+from datetime import datetime
+from typing import Dict, Any, Optional
+from .base_card import BaseProviderCard
 
 
 class BarChartWidget(QWidget):
@@ -14,8 +15,8 @@ class BarChartWidget(QWidget):
     def __init__(self):
         super().__init__()
         self.data = {}  # {date_str: value}
-        self.setMinimumHeight(80)
-        self.setMaximumHeight(100)
+        self.setMinimumHeight(50)
+        self.setMaximumHeight(60)
         
     def set_data(self, data: Dict[str, float]):
         """Set the data to display"""
@@ -76,99 +77,71 @@ class BarChartWidget(QWidget):
                                Qt.AlignmentFlag.AlignCenter, value_text)
 
 
-class OpenAICard(QFrame):
+class OpenAICard(BaseProviderCard):
     """Enhanced OpenAI provider card with bar chart"""
-    clicked = pyqtSignal(str)
     
     def __init__(self):
-        super().__init__()
-        self.provider_name = "openai"
         self.weekly_data = {}
-        self.setup_ui()
+        super().__init__(
+            provider_name="openai",
+            display_name="OpenAI",
+            color="#10a37f"
+        )
         
-    def setup_ui(self):
-        """Setup the card UI"""
-        self.setFrameStyle(QFrame.Shape.Box)
-        self.setFixedSize(220, 280)
-        self.setCursor(Qt.CursorShape.PointingHandCursor)
-        
-        # Layout
-        layout = QVBoxLayout()
-        layout.setContentsMargins(15, 15, 15, 15)
-        layout.setSpacing(5)
-        
-        # Provider name
-        self.name_label = QLabel("OpenAI")
-        font = QFont()
-        font.setPointSize(14)
-        font.setBold(True)
-        self.name_label.setFont(font)
-        self.name_label.setStyleSheet("color: #333;")
-        layout.addWidget(self.name_label)
-        
+    def setup_content(self):
+        """Add OpenAI-specific content"""
         # Cost display
-        self.cost_label = QLabel("$0.00")
+        self.cost_label = QLabel("$0.0000")
         font = QFont()
-        font.setPointSize(20)
+        font.setPointSize(self.base_font_sizes['primary'])
         self.cost_label.setFont(font)
         self.cost_label.setStyleSheet("color: #000; font-weight: bold;")
-        layout.addWidget(self.cost_label)
+        self.layout.addWidget(self.cost_label)
         
         # Token count
         self.token_label = QLabel("Tokens: -")
-        self.token_label.setStyleSheet("color: #666; font-size: 12px;")
-        layout.addWidget(self.token_label)
-        
-        # Status
-        self.status_label = QLabel("Checking...")
-        self.status_label.setStyleSheet("color: gray; font-size: 11px;")
-        layout.addWidget(self.status_label)
+        self.token_label.setStyleSheet(f"color: #666; font-size: {self.base_font_sizes['secondary']}px;")
+        self.layout.addWidget(self.token_label)
         
         # Weekly chart label
         self.chart_label = QLabel("Past 7 days:")
-        self.chart_label.setStyleSheet("color: #666; font-size: 11px; margin-top: 8px;")
-        layout.addWidget(self.chart_label)
+        self.chart_label.setStyleSheet(f"color: #666; font-size: {self.base_font_sizes['small']}px; margin-top: 8px;")
+        self.layout.addWidget(self.chart_label)
         
         # Bar chart
         self.bar_chart = BarChartWidget()
-        layout.addWidget(self.bar_chart)
+        self.layout.addWidget(self.bar_chart)
         
-        layout.addStretch()
-        self.setLayout(layout)
+    def update_display(self, data: Dict[str, Any]):
+        """Update the card display"""
+        cost = data.get('cost', 0.0)
+        tokens = data.get('tokens')
+        status = data.get('status', 'Active')
+        weekly_data = data.get('weekly_data', {})
         
-        # Styling
-        self.setStyleSheet("""
-            OpenAICard {
-                background-color: white;
-                border: 2px solid #10a37f;
-                border-radius: 10px;
-            }
-            OpenAICard:hover {
-                background-color: #f8f9fa;
-            }
-        """)
-        
-    def update_display(self, cost: float, tokens: Optional[int], status: str):
-        """Update the basic display"""
-        # Always show 4 decimal places for daily cost
+        # Update cost
         self.cost_label.setText(f"${cost:.4f}")
         
+        # Update tokens
         if tokens is not None:
             self.token_label.setText(f"Tokens: {tokens:,}")
         else:
             self.token_label.setText("Tokens: -")
             
-        self.status_label.setText(status)
-        
-        # Update status color
+        # Update weekly data if provided
+        if weekly_data:
+            self.update_weekly_data(weekly_data)
+            
+        # Update status
+        status_type = "normal"
         if status == "Active" or "Session" in status:
-            self.status_label.setStyleSheet("color: #28a745; font-size: 11px;")
+            status_type = "active"
         elif "Waiting" in status:
-            self.status_label.setStyleSheet("color: #ff6b35; font-size: 11px; font-weight: bold;")
+            status_type = "warning"
         elif "Error" in status:
-            self.status_label.setStyleSheet("color: #dc3545; font-size: 11px;")
-        else:
-            self.status_label.setStyleSheet("color: gray; font-size: 11px;")
+            status_type = "error"
+            
+        self.update_status(status, status_type)
             
     def update_weekly_data(self, weekly_data: Dict[str, Dict]):
         """Update the weekly bar chart data"""
@@ -190,6 +163,13 @@ class OpenAICard(QFrame):
         else:
             self.chart_label.setText("Past 7 days:")
             
-    def mousePressEvent(self, event):
-        if event.button() == Qt.MouseButton.LeftButton:
-            self.clicked.emit(self.provider_name)
+    def scale_content_fonts(self, scale: float):
+        """Scale OpenAI-specific fonts"""
+        # Scale cost label
+        font = QFont()
+        font.setPointSize(int(self.base_font_sizes['primary'] * scale))
+        self.cost_label.setFont(font)
+        
+        # Scale other labels
+        self.token_label.setStyleSheet(f"color: #666; font-size: {int(self.base_font_sizes['secondary'] * scale)}px;")
+        self.chart_label.setStyleSheet(f"color: #666; font-size: {int(self.base_font_sizes['small'] * scale)}px; margin-top: 8px;")

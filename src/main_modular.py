@@ -1,0 +1,717 @@
+#!/usr/bin/env python3
+"""
+Modular version using configuration-based layout
+"""
+import sys
+import os
+import json
+import logging
+import requests
+from datetime import datetime, timedelta, timezone
+from typing import Dict, Optional, Any
+import threading
+from pathlib import Path
+
+from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QMenu
+from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QObject
+from PyQt6.QtGui import QFont, QKeySequence, QShortcut, QAction
+
+# Add path for imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from src.providers.claude_code_reader import ClaudeCodeReader
+from src.utils.session_helper import find_session_start
+from src.core.cache_db import CacheDB
+from src.ui.layout_manager import LayoutManager
+from src.ui.theme_manager import ThemeManager
+from src.ui.card_registry import CardRegistry
+
+# Setup logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
+# Reduce verbosity of Claude reader logs
+logging.getLogger('src.providers.claude_code_reader').setLevel(logging.WARNING)
+
+
+class ClaudeDataWorker(QObject):
+    """Worker to fetch Claude data in background thread"""
+    data_ready = pyqtSignal(dict)
+    
+    def __init__(self, claude_reader):
+        super().__init__()
+        self.claude_reader = claude_reader
+        self._thread = None
+        self._stop_flag = threading.Event()
+        
+    def fetch_data_async(self, session_start: datetime, now: datetime):
+        """Start fetching data in a background thread"""
+        if self._thread and self._thread.is_alive():
+            logger.debug("Claude fetch already in progress, skipping")
+            return
+            
+        self._thread = threading.Thread(
+            target=self._fetch_data_thread, 
+            args=(session_start, now),
+            daemon=True
+        )
+        self._thread.start()
+        
+    def _fetch_data_thread(self, session_start: datetime, now: datetime):
+        """Thread function to fetch data"""
+        try:
+            logger.debug("Starting Claude data fetch in background")
+            
+            # Get session data
+            session_data = self.claude_reader.get_usage_data(since_date=session_start)
+            
+            # Get daily data
+            one_day_ago = now - timedelta(hours=24)
+            daily_data = self.claude_reader.get_usage_data(since_date=one_day_ago)
+            
+            # Calculate non-cache tokens
+            non_cache_tokens = 0
+            if session_data['model_breakdown']:
+                for model_stats in session_data['model_breakdown'].values():
+                    non_cache_tokens += model_stats.get('input_tokens', 0)
+                    non_cache_tokens += model_stats.get('output_tokens', 0)
+            
+            # Get rate history
+            rate_history = self.claude_reader.get_token_rate_history(session_start, interval_minutes=0.5)
+            
+            result = {
+                'daily': daily_data['total_cost'],
+                'session': session_data['total_cost'],
+                'tokens': non_cache_tokens,
+                'session_start': session_start,
+                'rate_history': rate_history,
+                'success': True
+            }
+            
+            self.data_ready.emit(result)
+            
+        except Exception as e:
+            logger.error(f"Error in background Claude fetch: {e}")
+            self.data_ready.emit({
+                'daily': 0.0,
+                'session': 0.0,
+                'tokens': 0,
+                'success': False,
+                'error': str(e)
+            })
+            
+    def stop(self):
+        """Stop the worker thread"""
+        self._stop_flag.set()
+        if self._thread:
+            self._thread.join(timeout=1.0)
+
+
+class ModularMainWindow(QMainWindow):
+    """Main window using modular card architecture"""
+    
+    def __init__(self):
+        super().__init__()
+        self.config = self._load_config()
+        self.api_keys = self._load_api_keys()
+        self.font_scale = 1.0
+        
+        # Initialize components
+        self.cache_db = CacheDB()
+        self.claude_reader = ClaudeCodeReader()
+        self.claude_worker = ClaudeDataWorker(self.claude_reader)
+        self.claude_worker.data_ready.connect(self.on_claude_data_ready)
+        
+        # Theme manager
+        themes = self.config.get('themes', {})
+        default_theme = self.config.get('default_theme', 'light')
+        self.theme_manager = ThemeManager(themes, default_theme)
+        self.theme_manager.theme_changed.connect(self.on_theme_changed)
+        
+        # Layout manager
+        self.layout_manager = LayoutManager(self.config.get('layout', {}))
+        
+        # Cache for provider data
+        self.cached_provider_data = {}
+        self.cached_claude_data = {}
+        self.last_claude_update = None
+        self.claude_fetch_in_progress = False
+        
+        self.setup_ui()
+        self.setup_timers()
+        
+        # Initial theme
+        self.apply_theme()
+        
+        # Initial fetch
+        QTimer.singleShot(100, self.fetch_all_data)
+        
+    def _load_config(self) -> dict:
+        """Load configuration from config.json"""
+        config_path = Path(__file__).parent.parent / "config.json"
+        try:
+            with open(config_path, 'r') as f:
+                return json.load(f)
+        except Exception as e:
+            logger.error(f"Error loading config: {e}")
+            return {}
+            
+    def _load_api_keys(self) -> Dict[str, str]:
+        """Load API keys from environment"""
+        return {
+            "openai": os.getenv("OPENAI_API_KEY", ""),
+            "anthropic": "",  # Claude Code doesn't use API key
+            "openrouter": os.getenv("OPENROUTER_API_KEY", ""),
+            "gemini": os.getenv("GOOGLE_CLOUD_PROJECT", "")
+        }
+        
+    def setup_ui(self):
+        """Setup the UI"""
+        self.setWindowTitle("UsageGrid")
+        self.setMinimumSize(480, 470)
+        
+        # Central widget
+        central_widget = QWidget()
+        self.setCentralWidget(central_widget)
+        
+        # Main layout
+        layout = QVBoxLayout()
+        layout.setContentsMargins(5, 5, 5, 5)
+        layout.setSpacing(5)
+        
+        # Header with daily and subscription totals
+        header_layout = QHBoxLayout()
+        
+        self.daily_total_label = QLabel("Daily: $0.00")
+        font = QFont()
+        font.setPointSize(18)
+        font.setBold(True)
+        self.daily_total_label.setFont(font)
+        header_layout.addWidget(self.daily_total_label)
+        
+        header_layout.addStretch()
+        
+        self.monthly_total_label = QLabel("Subscriptions: $0/mo")
+        font = QFont()
+        font.setPointSize(18)
+        font.setBold(True)
+        self.monthly_total_label.setFont(font)
+        header_layout.addWidget(self.monthly_total_label)
+        
+        layout.addLayout(header_layout)
+        
+        # Info bar
+        info_layout = QHBoxLayout()
+        self.info_label = QLabel("Fetching real API data...")
+        self.info_label.setStyleSheet("color: gray;")
+        info_layout.addWidget(self.info_label)
+        
+        info_layout.addStretch()
+        
+        self.last_update_label = QLabel("Last update: -")
+        self.last_update_label.setStyleSheet("color: gray;")
+        info_layout.addWidget(self.last_update_label)
+        
+        layout.addLayout(info_layout)
+        
+        # Cards grid using layout manager
+        self.cards_layout = self.layout_manager.create_layout(central_widget)
+        layout.addLayout(self.cards_layout)
+        
+        # Connect card clicks
+        for card in self.layout_manager.get_all_cards().values():
+            card.clicked.connect(self.on_provider_clicked)
+        
+        layout.addStretch()
+        central_widget.setLayout(layout)
+        
+        # Setup keyboard shortcuts
+        self.setup_shortcuts()
+        
+        # Setup menu bar
+        self.setup_menu()
+        
+    def setup_menu(self):
+        """Setup menu bar"""
+        menubar = self.menuBar()
+        
+        # View menu
+        view_menu = menubar.addMenu('View')
+        
+        # Theme submenu
+        theme_menu = view_menu.addMenu('Theme')
+        for theme_name in self.theme_manager.get_available_themes():
+            action = QAction(theme_name.capitalize(), self)
+            action.triggered.connect(lambda checked, t=theme_name: self.theme_manager.set_theme(t))
+            theme_menu.addAction(action)
+            
+    def setup_shortcuts(self):
+        """Setup keyboard shortcuts"""
+        # Font scaling
+        increase_shortcut = QShortcut(QKeySequence("Ctrl++"), self)
+        increase_shortcut.activated.connect(lambda: self.scale_fonts(1.1))
+        
+        increase_alt = QShortcut(QKeySequence("Ctrl+="), self)
+        increase_alt.activated.connect(lambda: self.scale_fonts(1.1))
+        
+        decrease_shortcut = QShortcut(QKeySequence("Ctrl+-"), self)
+        decrease_shortcut.activated.connect(lambda: self.scale_fonts(0.9))
+        
+        reset_shortcut = QShortcut(QKeySequence("Ctrl+0"), self)
+        reset_shortcut.activated.connect(lambda: self.reset_fonts())
+        
+        # Theme switching
+        theme_shortcut = QShortcut(QKeySequence("Ctrl+T"), self)
+        theme_shortcut.activated.connect(self.toggle_theme)
+        
+    def setup_timers(self):
+        """Setup update timers"""
+        # API providers - every 5 minutes
+        self.api_timer = QTimer()
+        self.api_timer.timeout.connect(self.fetch_api_providers)
+        self.api_timer.start(300000)  # 5 minutes
+        
+        # Claude Code - every 30 seconds
+        self.claude_timer = QTimer()
+        self.claude_timer.timeout.connect(self.update_claude_only)
+        self.claude_timer.start(30000)  # 30 seconds
+        
+    def scale_fonts(self, factor):
+        """Scale all fonts by factor"""
+        self.font_scale *= factor
+        self.update_all_fonts()
+        
+    def reset_fonts(self):
+        """Reset fonts to default size"""
+        self.font_scale = 1.0
+        self.update_all_fonts()
+        
+    def update_all_fonts(self):
+        """Update all fonts in the UI"""
+        # Update header fonts
+        font = QFont()
+        font.setPointSize(int(18 * self.font_scale))
+        font.setBold(True)
+        self.daily_total_label.setFont(font)
+        self.monthly_total_label.setFont(font)
+        
+        # Update all cards
+        for card in self.layout_manager.get_all_cards().values():
+            card.scale_fonts(self.font_scale)
+            
+    def toggle_theme(self):
+        """Toggle between light and dark theme"""
+        current = self.theme_manager.current_theme
+        themes = self.theme_manager.get_available_themes()
+        current_idx = themes.index(current)
+        next_idx = (current_idx + 1) % len(themes)
+        self.theme_manager.set_theme(themes[next_idx])
+        
+    def on_theme_changed(self, theme_name: str):
+        """Handle theme change"""
+        self.apply_theme()
+        
+    def apply_theme(self):
+        """Apply current theme to the application"""
+        # Apply to main window
+        self.setStyleSheet(f"""
+            QMainWindow {{
+                background-color: {self.theme_manager.get_color('background')};
+            }}
+            QLabel {{
+                color: {self.theme_manager.get_color('text_primary')};
+            }}
+        """)
+        
+        # Update card styles
+        for provider, card in self.layout_manager.get_all_cards().items():
+            style = self.theme_manager.get_card_style(card.color)
+            card.setStyleSheet(style)
+            
+    def fetch_all_data(self):
+        """Fetch data from all providers"""
+        self.fetch_api_providers()
+        self.update_claude_only()
+        
+    def fetch_api_providers(self):
+        """Fetch data from API-based providers"""
+        daily_usage_total = 0.0
+        
+        # OpenAI
+        if self.api_keys.get("openai"):
+            cost, tokens, weekly_data = self.fetch_openai_data()
+            if cost >= 0:
+                data = {
+                    'cost': cost,
+                    'tokens': tokens,
+                    'weekly_data': weekly_data,
+                    'status': 'Active'
+                }
+                self.layout_manager.update_card_data('openai', data)
+                daily_usage_total += cost
+            elif cost == -429:
+                self.layout_manager.update_card_data('openai', {
+                    'cost': self.cached_provider_data.get('openai', {}).get('cost', 0.0),
+                    'status': 'Waiting for API reset'
+                })
+                
+        # OpenRouter
+        if self.api_keys.get("openrouter"):
+            openrouter_data = self.fetch_openrouter_data()
+            cost = openrouter_data.get('usage', 0.0)
+            data = {
+                'cost': cost,
+                'detailed_info': openrouter_data,
+                'status': 'Active'
+            }
+            self.layout_manager.update_card_data('openrouter', data)
+            daily_usage_total += cost
+            
+        # Gemini
+        if self.api_keys.get("gemini"):
+            cost, requests = self.fetch_gemini_data()
+            if cost >= 0:
+                data = {
+                    'cost': cost,
+                    'requests': requests,
+                    'status': 'Active' if cost > 0 else 'No usage'
+                }
+                self.layout_manager.update_card_data('gemini', data)
+                daily_usage_total += cost
+                
+        # Update totals
+        self.update_totals_display(daily_usage_total)
+        
+    def fetch_openai_data(self) -> tuple[float, int, dict]:
+        """Fetch OpenAI usage data"""
+        try:
+            headers = {
+                "Authorization": f"Bearer {self.api_keys['openai']}",
+                "OpenAI-Beta": "usage=1"
+            }
+            
+            # Get today's date
+            today = datetime.now().strftime("%Y-%m-%d")
+            
+            # Check cache first
+            cached = self.cache_db.get_openai_daily_usage(today)
+            if cached:
+                total_cost = cached['cost']
+                total_tokens = cached['tokens']
+            else:
+                # Fetch from API
+                response = requests.get(
+                    f"https://api.openai.com/v1/usage?date={today}",
+                    headers=headers,
+                    timeout=5
+                )
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    
+                    # Calculate costs
+                    total_cost = 0.0
+                    total_tokens = 0
+                    
+                    # OpenAI pricing
+                    pricing = {
+                        "gpt-4o-2024-08-06": {"input": 2.50, "output": 10.00},
+                        "gpt-4o-mini-2024-07-18": {"input": 0.15, "output": 0.60},
+                        "gpt-3.5-turbo": {"input": 0.50, "output": 1.50}
+                    }
+                    
+                    if "data" in data:
+                        for item in data["data"]:
+                            context_tokens = item.get("n_context_tokens_total", 0)
+                            generated_tokens = item.get("n_generated_tokens_total", 0)
+                            model = item.get("snapshot_id", "")
+                            
+                            model_pricing = pricing.get(model, pricing["gpt-4o-mini-2024-07-18"])
+                            
+                            input_cost = (context_tokens / 1_000_000) * model_pricing["input"]
+                            output_cost = (generated_tokens / 1_000_000) * model_pricing["output"]
+                            
+                            total_cost += input_cost + output_cost
+                            total_tokens += context_tokens + generated_tokens
+                    
+                    # Cache today's data
+                    self.cache_db.set_openai_daily_usage(today, total_tokens, total_cost, data)
+                elif response.status_code == 429:
+                    return -429, -429, {}
+                else:
+                    return -1, -1, {}
+                    
+            # Get weekly data
+            weekly_data = {}
+            for i in range(7):
+                date = (datetime.now() - timedelta(days=i)).strftime("%Y-%m-%d")
+                cached_day = self.cache_db.get_openai_daily_usage(date)
+                if cached_day:
+                    weekly_data[date] = {
+                        'cost': cached_day['cost'],
+                        'tokens': cached_day['tokens']
+                    }
+                    
+            return total_cost, total_tokens, weekly_data
+            
+        except Exception as e:
+            logger.error(f"Error fetching OpenAI data: {e}")
+            return -1, -1, {}
+            
+    def fetch_openrouter_data(self) -> dict:
+        """Fetch OpenRouter usage data"""
+        try:
+            headers = {
+                "Authorization": f"Bearer {self.api_keys['openrouter']}",
+                "Content-Type": "application/json"
+            }
+            
+            response = requests.get(
+                "https://openrouter.ai/api/v1/auth/key",
+                headers=headers,
+                timeout=5
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                if "data" in data:
+                    api_data = data["data"]
+                    return {
+                        "usage": api_data.get("usage", 0.0),
+                        "limit": api_data.get("limit"),
+                        "limit_remaining": api_data.get("limit_remaining"),
+                        "is_free_tier": api_data.get("is_free_tier", False),
+                        "rate_limit": api_data.get("rate_limit", {}),
+                        "label": api_data.get("label", "")
+                    }
+                    
+            return {"usage": 0.0, "limit": None, "is_free_tier": False}
+            
+        except Exception as e:
+            logger.error(f"Error fetching OpenRouter data: {e}")
+            return {"usage": 0.0, "limit": None, "is_free_tier": False}
+            
+    def fetch_gemini_data(self) -> tuple[float, int]:
+        """Fetch Gemini usage data"""
+        try:
+            project_id = os.getenv("GOOGLE_CLOUD_PROJECT")
+            if not project_id:
+                return 0.0, 0
+                
+            # Import Google Cloud libraries
+            try:
+                from google.cloud import monitoring_v3
+                import google.auth
+            except ImportError:
+                logger.error("Google Cloud packages not installed")
+                return -1, 0
+                
+            # Get credentials
+            try:
+                credentials, _ = google.auth.default()
+            except Exception:
+                return -1, 0
+                
+            # Use monitoring API for request counts
+            monitoring_client = monitoring_v3.MetricServiceClient(credentials=credentials)
+            
+            project_name = f"projects/{project_id}"
+            interval = monitoring_v3.TimeInterval(
+                {
+                    "end_time": {"seconds": int(datetime.now().timestamp())},
+                    "start_time": {"seconds": int((datetime.now() - timedelta(hours=24)).timestamp())},
+                }
+            )
+            
+            # Query for Vertex AI requests - need separate queries due to API restrictions
+            total_requests = 0
+            
+            # Query online predictions
+            try:
+                results = monitoring_client.list_time_series(
+                    request={
+                        "name": project_name,
+                        "filter": 'metric.type="aiplatform.googleapis.com/prediction/online/request_count"',
+                        "interval": interval,
+                    }
+                )
+                
+                gemini_models = ["gemini", "text-bison", "chat-bison"]
+                for result in results:
+                    resource_labels = result.resource.labels
+                    model_id = resource_labels.get("model_id", "").lower()
+                    
+                    if model_id:
+                        logger.debug(f"Found Vertex AI model: {model_id}")
+                        
+                    if any(gemini_model in model_id for gemini_model in gemini_models) or not model_id:
+                        for point in result.points:
+                            total_requests += point.value.int64_value
+            except Exception:
+                pass
+                
+            # Query model predictions
+            try:
+                results = monitoring_client.list_time_series(
+                    request={
+                        "name": project_name,
+                        "filter": 'metric.type="aiplatform.googleapis.com/prediction/model/request_count"',
+                        "interval": interval,
+                    }
+                )
+                
+                for result in results:
+                    resource_labels = result.resource.labels
+                    model_id = resource_labels.get("model_id", "").lower()
+                    
+                    if model_id:
+                        logger.debug(f"Found Vertex AI model: {model_id}")
+                        
+                    if any(gemini_model in model_id for gemini_model in gemini_models) or not model_id:
+                        for point in result.points:
+                            total_requests += point.value.int64_value
+            except Exception:
+                pass
+                        
+            # Estimate cost
+            estimated_cost_per_request = 0.0025 + (0.01 * 2)
+            estimated_daily_cost = total_requests * estimated_cost_per_request
+            
+            logger.info(f"Gemini: {total_requests} requests, estimated ${estimated_daily_cost:.2f}")
+            return estimated_daily_cost, total_requests
+            
+        except Exception as e:
+            logger.error(f"Error fetching Gemini data: {e}")
+            return 0.0, 0
+            
+    def update_claude_only(self):
+        """Update only Claude Code data"""
+        try:
+            claude_data = self.fetch_claude_code_cached()
+            
+            if claude_data['tokens'] > 0 and not self.claude_fetch_in_progress:
+                data = {
+                    'daily_cost': claude_data['daily'],
+                    'session_cost': claude_data['session'],
+                    'tokens': claude_data['tokens'],
+                    'is_active': claude_data['tokens'] > 0,
+                    'session_start': claude_data.get('session_start'),
+                    'initial_rate_data': claude_data.get('rate_history', [])
+                }
+                self.layout_manager.update_card_data('anthropic', data)
+                
+        except Exception as e:
+            logger.error(f"Error updating Claude data: {e}")
+            
+    def fetch_claude_code_cached(self) -> dict:
+        """Fetch Claude Code data with caching"""
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        
+        # Check if we need to update
+        if self.last_claude_update:
+            time_since_update = (now - self.last_claude_update).total_seconds()
+            if time_since_update < 25 and self.cached_claude_data:
+                return self.cached_claude_data
+                
+        # Find current session
+        session_start = find_session_start(now)
+        
+        # Start background fetch if not already running
+        if not self.claude_fetch_in_progress:
+            self.claude_fetch_in_progress = True
+            self.claude_worker.fetch_data_async(session_start, now)
+            
+        # Return cached data while waiting
+        return self.cached_claude_data if self.cached_claude_data else {
+            'daily': 0.0,
+            'session': 0.0,
+            'tokens': 0,
+            'session_start': session_start
+        }
+        
+    def on_claude_data_ready(self, data: dict):
+        """Handle Claude data from background thread"""
+        self.claude_fetch_in_progress = False
+        
+        if data['success']:
+            self.cached_claude_data = data
+            self.last_claude_update = datetime.now(timezone.utc).replace(tzinfo=None)
+            
+            # Update the Claude card
+            card_data = {
+                'daily_cost': data['daily'],
+                'session_cost': data['session'],
+                'tokens': data['tokens'],
+                'is_active': data['tokens'] > 0,
+                'session_start': data.get('session_start'),
+                'initial_rate_data': data.get('rate_history', [])
+            }
+            self.layout_manager.update_card_data('anthropic', card_data)
+            
+            # Log update
+            session_start = data.get('session_start')
+            if session_start:
+                hours_ago = (datetime.now(timezone.utc).replace(tzinfo=None) - session_start).total_seconds() / 3600
+                logger.info(f"Claude Code - Session started {hours_ago:.1f}h ago, "
+                          f"Daily: ${data['daily']:.2f}, Session: ${data['session']:.2f}, "
+                          f"Tokens: {data['tokens']:,}")
+                          
+            self.info_label.setText("Claude data updated")
+            
+    def get_claude_subscription_cost(self) -> float:
+        """Get Claude subscription monthly cost"""
+        claude_config = self.config.get("claude_code", {})
+        plan = claude_config.get("subscription_plan", "max20")
+        plans = claude_config.get("plans", {})
+        plan_info = plans.get(plan, {"monthly_cost": 200})
+        return plan_info.get("monthly_cost", 200)
+        
+    def update_totals_display(self, daily_usage: float = None):
+        """Update the totals display"""
+        if daily_usage is None:
+            daily_usage = sum(self.cached_provider_data.get(p, {}).get("cost", 0) 
+                            for p in ["openai", "openrouter", "gemini"])
+                            
+        subscription_total = self.get_claude_subscription_cost()
+        
+        self.daily_total_label.setText(f"Daily: ${daily_usage:.4f}")
+        self.monthly_total_label.setText(f"Subscriptions: ${subscription_total}/mo")
+        self.last_update_label.setText(f"Last update: {datetime.now().strftime('%H:%M:%S')}")
+        self.info_label.setText("Data updated successfully")
+        
+    def on_provider_clicked(self, provider_name: str):
+        """Handle provider card click"""
+        logger.info(f"Provider clicked: {provider_name}")
+        # TODO: Show detailed view
+        
+    def closeEvent(self, event):
+        """Handle window close"""
+        self.claude_worker.stop()
+        self.api_timer.stop()
+        self.claude_timer.stop()
+        event.accept()
+
+
+def main():
+    """Main entry point"""
+    try:
+        app = QApplication(sys.argv)
+        app.setApplicationName("UsageGrid")
+        
+        window = ModularMainWindow()
+        window.show()
+        
+        sys.exit(app.exec())
+        
+    except Exception as e:
+        logger.error(f"Application error: {e}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()

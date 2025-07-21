@@ -1,98 +1,73 @@
 """
 Enhanced OpenRouter card with detailed information display
 """
-from PyQt6.QtWidgets import QFrame, QVBoxLayout, QHBoxLayout, QLabel, QWidget
-from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtWidgets import QLabel
+from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QFont
-from typing import Dict, Optional
+from typing import Dict, Any, Tuple, Optional
+from .base_card import BaseProviderCard
 
 
-class OpenRouterCard(QFrame):
+class OpenRouterCard(BaseProviderCard):
     """Enhanced OpenRouter provider card with detailed information"""
-    clicked = pyqtSignal(str)
     
-    def __init__(self):
-        super().__init__()
-        self.provider_name = "openrouter"
-        self.setup_ui()
+    def __init__(self, size: Tuple[int, int] = (220, 210)):
+        self.is_half_height = size[1] < 150
+        super().__init__(
+            provider_name="openrouter",
+            display_name="OpenRouter",
+            color="#ee4b2b",
+            size=size
+        )
         
-    def setup_ui(self):
-        """Setup the card UI"""
-        self.setFrameStyle(QFrame.Shape.Box)
-        self.setFixedSize(220, 240)
-        self.setCursor(Qt.CursorShape.PointingHandCursor)
-        
-        # Layout
-        layout = QVBoxLayout()
-        layout.setContentsMargins(15, 15, 15, 15)
-        layout.setSpacing(5)
-        
-        # Provider name
-        self.name_label = QLabel("OpenRouter")
-        font = QFont()
-        font.setPointSize(14)
-        font.setBold(True)
-        self.name_label.setFont(font)
-        self.name_label.setStyleSheet("color: #333;")
-        layout.addWidget(self.name_label)
-        
+    def setup_content(self):
+        """Add OpenRouter-specific content"""
         # Cost display
         self.cost_label = QLabel("$0.00")
         font = QFont()
-        font.setPointSize(20)
+        font.setPointSize(self.base_font_sizes['primary'] if not self.is_half_height else self.base_font_sizes['secondary'])
         self.cost_label.setFont(font)
         self.cost_label.setStyleSheet("color: #000; font-weight: bold;")
-        layout.addWidget(self.cost_label)
+        self.layout.addWidget(self.cost_label)
         
-        # Status
-        self.status_label = QLabel("Checking...")
-        self.status_label.setStyleSheet("color: gray; font-size: 11px;")
-        layout.addWidget(self.status_label)
-        
+        # Always show additional info, just with smaller font for half-height
         # Limit info
         self.limit_label = QLabel("")
-        self.limit_label.setStyleSheet("color: #666; font-size: 11px;")
-        layout.addWidget(self.limit_label)
+        self.limit_label.setStyleSheet(f"color: #666; font-size: {self.base_font_sizes['small']}px;")
+        self.layout.addWidget(self.limit_label)
         
         # Rate limit info
         self.rate_limit_label = QLabel("")
-        self.rate_limit_label.setStyleSheet("color: #666; font-size: 11px;")
+        self.rate_limit_label.setStyleSheet(f"color: #666; font-size: {self.base_font_sizes['small']}px;")
         self.rate_limit_label.setWordWrap(True)
-        layout.addWidget(self.rate_limit_label)
+        self.layout.addWidget(self.rate_limit_label)
         
         # Free tier indicator
         self.free_tier_label = QLabel("")
-        self.free_tier_label.setStyleSheet("color: #28a745; font-size: 11px; font-weight: bold;")
-        layout.addWidget(self.free_tier_label)
+        self.free_tier_label.setStyleSheet(f"color: #28a745; font-size: {self.base_font_sizes['small']}px; font-weight: bold;")
+        self.layout.addWidget(self.free_tier_label)
         
-        layout.addStretch()
-        self.setLayout(layout)
+    def update_display(self, data: Dict[str, Any]):
+        """Update the card display"""
+        cost = data.get('cost', 0.0)
+        status = data.get('status', 'Active')
+        detailed_info = data.get('detailed_info', {})
         
-        # Styling
-        self.setStyleSheet("""
-            OpenRouterCard {
-                background-color: white;
-                border: 2px solid #ee4b2b;
-                border-radius: 10px;
-            }
-            OpenRouterCard:hover {
-                background-color: #f8f9fa;
-            }
-        """)
-        
-    def update_display(self, cost: float, tokens: Optional[int], status: str):
-        """Update the basic display"""
-        # Always show 4 decimal places for daily cost
+        # Update cost
         self.cost_label.setText(f"${cost:.4f}")
-        self.status_label.setText(status)
         
-        # Update status color
+        # Update detailed info if available
+        if detailed_info:
+            self.update_detailed_info(detailed_info)
+            
+        # Update status
+        status_type = "normal"
         if "Active" in status:
-            self.status_label.setStyleSheet("color: #28a745; font-size: 11px;")
+            status_type = "active"
         elif "Error" in status:
-            self.status_label.setStyleSheet("color: #dc3545; font-size: 11px;")
-        else:
-            self.status_label.setStyleSheet("color: gray; font-size: 11px;")
+            status_type = "error"
+            
+        self.update_status(status, status_type)
             
     def update_detailed_info(self, data: Dict):
         """Update detailed information display"""
@@ -106,7 +81,8 @@ class OpenRouterCard(QFrame):
             self.limit_label.setText(f"Usage limit: ${data['limit']:.2f}")
             self.limit_label.show()
         else:
-            self.limit_label.hide()
+            if hasattr(self, 'limit_label'):
+                self.limit_label.hide()
             
         # Update rate limit info
         rate_limit = data.get("rate_limit", {})
@@ -116,15 +92,28 @@ class OpenRouterCard(QFrame):
             self.rate_limit_label.setText(f"Rate limit: {requests_remaining}/{requests} requests")
             self.rate_limit_label.show()
         else:
-            self.rate_limit_label.hide()
+            if hasattr(self, 'rate_limit_label'):
+                self.rate_limit_label.hide()
             
         # Update free tier indicator
         if data.get("is_free_tier"):
             self.free_tier_label.setText("✓ Free tier active")
             self.free_tier_label.show()
         else:
-            self.free_tier_label.hide()
-            
-    def mousePressEvent(self, event):
-        if event.button() == Qt.MouseButton.LeftButton:
-            self.clicked.emit(self.provider_name)
+            if hasattr(self, 'free_tier_label'):
+                self.free_tier_label.hide()
+                
+    def scale_content_fonts(self, scale: float):
+        """Scale OpenRouter-specific fonts"""
+        # Scale cost label
+        font = QFont()
+        font.setPointSize(int(self.base_font_sizes['primary'] * scale))
+        self.cost_label.setFont(font)
+        
+        # Scale other labels if they exist
+        if hasattr(self, 'limit_label'):
+            self.limit_label.setStyleSheet(f"color: #666; font-size: {int(self.base_font_sizes['small'] * scale)}px;")
+        if hasattr(self, 'rate_limit_label'):
+            self.rate_limit_label.setStyleSheet(f"color: #666; font-size: {int(self.base_font_sizes['small'] * scale)}px;")
+        if hasattr(self, 'free_tier_label'):
+            self.free_tier_label.setStyleSheet(f"color: #28a745; font-size: {int(self.base_font_sizes['small'] * scale)}px; font-weight: bold;")

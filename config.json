@@ -24,5 +24,63 @@
         "display_name": "Claude Max 20×"
       }
     }
-  }
+  },
+  "layout": {
+    "rows": 2,
+    "columns": 2,
+    "cards": [
+      {
+        "position": [0, 0],
+        "provider": "openai",
+        "card_type": "openai",
+        "display_name": "OpenAI",
+        "color": "#10a37f"
+      },
+      {
+        "position": [0, 1],
+        "provider": "anthropic",
+        "card_type": "claude_code",
+        "display_name": "Claude Code",
+        "color": "#e16e3d"
+      },
+      {
+        "position": [1, 0],
+        "stack": [
+          {
+            "provider": "openrouter",
+            "card_type": "openrouter",
+            "display_name": "OpenRouter",
+            "color": "#ee4b2b",
+            "size": "half"
+          },
+          {
+            "provider": "gemini",
+            "card_type": "simple",
+            "display_name": "Gemini",
+            "color": "#4285f4",
+            "size": "half",
+            "metric_name": "Requests",
+            "show_estimated": true
+          }
+        ]
+      }
+    ]
+  },
+  "themes": {
+    "light": {
+      "background": "#f5f5f5",
+      "card_background": "white",
+      "text_primary": "#000000",
+      "text_secondary": "#666666",
+      "border": "#e0e0e0"
+    },
+    "dark": {
+      "background": "#1e1e1e",
+      "card_background": "#2d2d2d",
+      "text_primary": "#ffffff",
+      "text_secondary": "#b0b0b0",
+      "border": "#404040"
+    }
+  },
+  "default_theme": "light"
 }
