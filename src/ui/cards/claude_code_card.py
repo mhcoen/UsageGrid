@@ -330,7 +330,15 @@ class ClaudeCodeCard(BaseProviderCard):
                 from zoneinfo import ZoneInfo
                 utc_time = limit_time.replace(tzinfo=ZoneInfo('UTC'))
                 local_limit_time = utc_time.astimezone()
-                time_str = local_limit_time.strftime("%I:%M %p").lstrip('0')
+                
+                # Check if it's today or tomorrow
+                local_now = datetime.now()
+                if local_limit_time.date() == local_now.date():
+                    time_str = local_limit_time.strftime("%I:%M %p").lstrip('0')
+                elif local_limit_time.date() == (local_now + timedelta(days=1)).date():
+                    time_str = "tomorrow " + local_limit_time.strftime("%I:%M %p").lstrip('0')
+                else:
+                    time_str = local_limit_time.strftime("%m/%d %I:%M %p").lstrip('0')
                 
                 # Always show the time tokens will run out
                 if time_until_limit < remaining:
