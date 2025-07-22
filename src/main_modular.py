@@ -72,12 +72,14 @@ class ClaudeDataWorker(QObject):
             one_day_ago = now - timedelta(hours=24)
             daily_data = self.claude_reader.get_usage_data(since_date=one_day_ago)
             
-            # Calculate non-cache tokens
-            non_cache_tokens = 0
+            # Calculate total tokens (including cache tokens)
+            total_tokens = 0
             if session_data['model_breakdown']:
                 for model_stats in session_data['model_breakdown'].values():
-                    non_cache_tokens += model_stats.get('input_tokens', 0)
-                    non_cache_tokens += model_stats.get('output_tokens', 0)
+                    total_tokens += model_stats.get('input_tokens', 0)
+                    total_tokens += model_stats.get('cache_read_tokens', 0)
+                    total_tokens += model_stats.get('cache_creation_tokens', 0)
+                    total_tokens += model_stats.get('output_tokens', 0)
             
             # Get rate history
             rate_history = self.claude_reader.get_token_rate_history(session_start, interval_minutes=0.5)
@@ -85,7 +87,7 @@ class ClaudeDataWorker(QObject):
             result = {
                 'daily': daily_data['total_cost'],
                 'session': session_data['total_cost'],
-                'tokens': non_cache_tokens,
+                'tokens': total_tokens,
                 'session_start': session_start,
                 'rate_history': rate_history,
                 'model_breakdown': session_data.get('model_breakdown', {}),
@@ -630,6 +632,7 @@ class ModularMainWindow(QMainWindow):
         if data['success']:
             self.cached_claude_data = data
             self.last_claude_update = datetime.now(timezone.utc).replace(tzinfo=None)
+            logger.debug(f"Claude data received: tokens={data.get('tokens', 0)}, session_cost=${data.get('session', 0):.4f}")
             
             # Update the Claude card
             card_data = {

@@ -171,12 +171,15 @@ class ClaudeCodeReader:
         processed_ids: Set[str] = set()
             
         logger.info(f"Reading Claude Code usage from {self.claude_dir}")
+        if since_date:
+            logger.debug(f"Looking for entries since {since_date}")
         
         total_cost = 0.0
         total_input_tokens = 0
         total_output_tokens = 0
         model_breakdown = {}
         session_count = 0
+        entries_processed = 0
         
         # Find all JSONL files
         pattern = str(self.claude_dir / "**" / "*.jsonl")
@@ -202,6 +205,8 @@ class ClaudeCodeReader:
             jsonl_files = all_jsonl_files
         
         logger.info(f"Found {len(jsonl_files)} JSONL files")
+        if jsonl_files:
+            logger.debug(f"Files to process: {[os.path.basename(f) for f in jsonl_files[:3]]}...")
         
         for file_path in jsonl_files:
             try:
@@ -236,6 +241,10 @@ class ClaudeCodeReader:
                                     continue
                                 processed_ids.add(entry_id)
                             
+                            # Only process assistant responses (which contain usage data)
+                            if entry.get('type') != 'assistant':
+                                continue
+                                
                             # Extract usage data - it's nested in message
                             message = entry.get('message', {})
                             usage = message.get('usage', {})
@@ -287,6 +296,10 @@ class ClaudeCodeReader:
                             if entry.get('sessionId'):
                                 session_count += 1
                                 
+                            entries_processed += 1
+                            if entries_processed <= 3:
+                                logger.debug(f"Processed entry: model={model}, tokens={input_tokens + cache_read_tokens + output_tokens}, cost=${item_cost:.4f}")
+                                
                         except json.JSONDecodeError:
                             logger.warning(f"Invalid JSON in {file_path}: {line[:50]}...")
                         except Exception as e:
@@ -295,6 +308,7 @@ class ClaudeCodeReader:
             except Exception as e:
                 logger.error(f"Error reading file {file_path}: {e}")
                 
+        logger.debug(f"Processed {entries_processed} entries with usage data")
         return {
             "total_cost": total_cost,
             "total_input_tokens": total_input_tokens,
