@@ -179,10 +179,9 @@ class ClaudeCodeReader:
         pattern = str(self.claude_dir / "**" / "*.jsonl")
         all_jsonl_files = glob.glob(pattern, recursive=True)
         
-        # Only check files modified recently (within the 5-hour session window)
-        # Add 30 minutes buffer to account for any edge cases
+        # Only check files modified recently (since session start at least)
         recent_files = []
-        cutoff_time = (window_start - timedelta(minutes=30)).timestamp()
+        cutoff_time = (window_start - timedelta(hours=24)).timestamp()
         
         for jsonl_path in all_jsonl_files:
             try:
