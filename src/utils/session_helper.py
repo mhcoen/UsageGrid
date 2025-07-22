@@ -13,6 +13,13 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# Cache for session start time to avoid repeated file scanning
+_session_cache = {
+    'session_start': None,
+    'session_end': None,
+    'last_check': None
+}
+
 def find_session_start(now: datetime, claude_dir: Path = None) -> datetime:
     """
     Find when the current session started by analyzing timestamps in JSONL files.
@@ -31,6 +38,25 @@ def find_session_start(now: datetime, claude_dir: Path = None) -> datetime:
     Returns:
         datetime: Start of the current session
     """
+    global _session_cache
+    
+    # Check if we have a valid cached session
+    if (_session_cache['session_start'] and 
+        _session_cache['session_end'] and 
+        _session_cache['last_check']):
+        # If we're still in the cached session window, return cached value
+        if _session_cache['session_start'] <= now <= _session_cache['session_end']:
+            # Session is still valid, no need to rescan
+            return _session_cache['session_start']
+        # If session has expired, we need to find the new session
+        # But only check once per minute to avoid excessive scanning
+        elif (now - _session_cache['last_check']).total_seconds() < 60:
+            # Return the expired session start for now
+            return _session_cache['session_start']
+    
+    # Update last check time
+    _session_cache['last_check'] = now
+    
     if claude_dir is None:
         claude_dir = Path.home() / ".claude" / "projects"
     
@@ -95,12 +121,18 @@ def find_session_start(now: datetime, claude_dir: Path = None) -> datetime:
         session_end = session_start + timedelta(hours=5)
         if session_start <= now <= session_end:
             current_session_start = session_start
+            # Cache the session info
+            _session_cache['session_start'] = session_start
+            _session_cache['session_end'] = session_end
             logger.info(f"Found active session: started at {session_start}, ends at {session_end}")
             break
     
     if current_session_start is None:
         # No active session - next message will start a new one
         logger.info("No active session found")
+        # Clear cache since there's no active session
+        _session_cache['session_start'] = None
+        _session_cache['session_end'] = None
         return now
     
     return current_session_start

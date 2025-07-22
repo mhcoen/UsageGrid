@@ -141,6 +141,10 @@ class ModularMainWindow(QMainWindow):
         self.last_claude_update = None
         self.claude_fetch_in_progress = False
         
+        # Theme selector state
+        self.theme_selector_active = False
+        self.original_gemini_card = None
+        
         self.setup_ui()
         self.setup_timers()
         
@@ -152,13 +156,21 @@ class ModularMainWindow(QMainWindow):
         
     def _load_config(self) -> dict:
         """Load configuration from config.json"""
-        config_path = Path(__file__).parent.parent / "config.json"
+        self.config_path = Path(__file__).parent.parent / "config.json"
         try:
-            with open(config_path, 'r') as f:
+            with open(self.config_path, 'r') as f:
                 return json.load(f)
         except Exception as e:
             logger.error(f"Error loading config: {e}")
             return {}
+            
+    def _save_config(self):
+        """Save configuration to config.json"""
+        try:
+            with open(self.config_path, 'w') as f:
+                json.dump(self.config, f, indent=2)
+        except Exception as e:
+            logger.error(f"Error saving config: {e}")
             
     def _load_api_keys(self) -> Dict[str, str]:
         """Load API keys from environment"""
@@ -174,8 +186,8 @@ class ModularMainWindow(QMainWindow):
         self.setWindowTitle("UsageGrid")
         # Calculate exact window size: 2 columns of 220px + 1px gap + 2px margins = 443px width
         # But we need extra width for header/info indents: 443 + 10 = 453px
-        # Height: header(~25) + info(~20) + 2 rows(420) + gap(2) + spacing(2) + margins(2) ≈ 471px
-        self.setFixedSize(453, 471)
+        # Height: header(~25) + info(~20) + 2 rows(420) + gap(2) + spacing(1) + margins(2) ≈ 470px
+        self.setFixedSize(453, 470)
         
         # Central widget
         central_widget = QWidget()
@@ -273,6 +285,10 @@ class ModularMainWindow(QMainWindow):
         theme_shortcut = QShortcut(QKeySequence("Ctrl+T"), self)
         theme_shortcut.activated.connect(self.toggle_theme)
         
+        # Theme selector
+        theme_selector_shortcut = QShortcut(QKeySequence("T"), self)
+        theme_selector_shortcut.activated.connect(self.show_theme_selector)
+        
     def setup_timers(self):
         """Setup update timers"""
         # API providers - every 5 minutes
@@ -338,9 +354,14 @@ class ModularMainWindow(QMainWindow):
         """)
         
         # Update card styles
+        is_dark = self.theme_manager.current_theme in ['dark', 'midnight', 'solarized_dark', 'nord', 'dracula', 'material_dark', 'monokai', 'github_dark']
         for provider, card in self.layout_manager.get_all_cards().items():
-            style = self.theme_manager.get_card_style(card.color)
+            style = self.theme_manager.get_card_style(card.color, card.provider_name)
             card.setStyleSheet(style)
+            
+            # Update theme-specific colors
+            if hasattr(card, 'update_theme_colors'):
+                card.update_theme_colors(is_dark)
             
     def fetch_all_data(self):
         """Fetch data from all providers"""
@@ -606,8 +627,12 @@ class ModularMainWindow(QMainWindow):
         
     def on_provider_clicked(self, provider_name: str):
         """Handle provider card click"""
-        logger.info(f"Provider clicked: {provider_name}")
-        # TODO: Show detailed view
+        # Close theme selector if clicking outside
+        if self.theme_selector_active and provider_name != "theme_selector":
+            self.hide_theme_selector()
+        else:
+            logger.info(f"Provider clicked: {provider_name}")
+            # TODO: Show detailed view
         
     def cleanup_cache(self):
         """Periodic cleanup of caches"""
@@ -616,6 +641,81 @@ class ModularMainWindow(QMainWindow):
         except Exception as e:
             logger.error(f"Error during cache cleanup: {e}")
         
+    def show_theme_selector(self):
+        """Show theme selector in place of Gemini card"""
+        if self.theme_selector_active:
+            return
+            
+        from src.ui.cards.theme_selector_card import ThemeSelectorCard
+        
+        # Store original Gemini card
+        self.original_gemini_card = self.layout_manager.get_card('gemini')
+        
+        # Create theme selector
+        theme_selector = ThemeSelectorCard(self.config.get('themes', {}), self.theme_manager.current_theme)
+        theme_selector.theme_selected.connect(self.on_theme_selected)
+        theme_selector.close_requested.connect(self.hide_theme_selector)
+        theme_selector.scale_fonts(self.font_scale)
+        
+        # Replace Gemini card in the layout
+        if self.original_gemini_card:
+            # Find the stack containing Gemini
+            for i in range(self.cards_layout.count()):
+                item = self.cards_layout.itemAt(i)
+                if item:
+                    widget = item.widget()
+                    if widget:
+                        stack_layout = widget.layout() if callable(widget.layout) else widget.layout
+                        if stack_layout:
+                            # Find Gemini in the stack
+                            for j in range(stack_layout.count()):
+                                stack_item = stack_layout.itemAt(j)
+                                if stack_item and stack_item.widget() == self.original_gemini_card:
+                                    # Replace with theme selector
+                                    self.original_gemini_card.hide()
+                                    stack_layout.insertWidget(j, theme_selector)
+                                    theme_selector.show()
+                                    theme_selector.theme_list.setFocus()
+                                    self.theme_selector_active = True
+                                    self.theme_selector_card = theme_selector
+                                    return
+                                    
+    def on_theme_selected(self, theme_name: str):
+        """Handle theme selection and save to config"""
+        if self.theme_manager.set_theme(theme_name):
+            # Update config with new theme
+            self.config['default_theme'] = theme_name
+            self._save_config()
+            
+    def hide_theme_selector(self):
+        """Hide theme selector and restore Gemini card"""
+        if not self.theme_selector_active:
+            return
+            
+        # Find and remove theme selector
+        for i in range(self.cards_layout.count()):
+            item = self.cards_layout.itemAt(i)
+            if item:
+                widget = item.widget()
+                if widget:
+                    stack_layout = widget.layout() if callable(widget.layout) else widget.layout
+                    if stack_layout:
+                        for j in range(stack_layout.count()):
+                            stack_item = stack_layout.itemAt(j)
+                            if stack_item and hasattr(self, 'theme_selector_card') and stack_item.widget() == self.theme_selector_card:
+                                # Remove theme selector
+                                self.theme_selector_card.hide()
+                                stack_layout.removeWidget(self.theme_selector_card)
+                                self.theme_selector_card.deleteLater()
+                                
+                                # Restore Gemini card
+                                if self.original_gemini_card:
+                                    stack_layout.insertWidget(j, self.original_gemini_card)
+                                    self.original_gemini_card.show()
+                                
+                                self.theme_selector_active = False
+                                return
+    
     def closeEvent(self, event):
         """Handle window close"""
         self.claude_worker.stop()

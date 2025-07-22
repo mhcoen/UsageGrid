@@ -22,10 +22,33 @@ venv.bak/
 *.db
 *.sqlite
 *.sqlite3
+llm_costs.db
 logs/
 exports/
 config/api_keys.json
+config.local.json
 .env
+.env.local
+
+# Debug and test files
+debug_*.py
+test_*.py
+verify_*.py
+find_*.py
+check_*.py
+
+# Screenshots (for development)
+screenshot*.png
+claude_monitor*.png
+*.png
+
+# Documentation build
+docs/_build/
+docs/_static/
+docs/_templates/
+
+# CLAUDE.local.md is user-specific
+CLAUDE.local.md
 
 # Distribution / packaging
 .Python

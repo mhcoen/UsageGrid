@@ -42,34 +42,64 @@ class ThemeManager(QObject):
         """
         app.setStyleSheet(style)
         
-    def get_card_style(self, border_color: str) -> str:
+    def get_accent_color(self, provider: str, default: str) -> str:
+        """Get accent color for a specific provider in current theme"""
+        accents = self.theme_data.get('accents', {})
+        return accents.get(provider, default)
+        
+    def get_card_style(self, border_color: str, provider: str = None) -> str:
         """Get card styling for current theme"""
+        # For high contrast theme, override border color
+        if self.current_theme == 'high_contrast':
+            card_bg = "#ffffff"
+            text_color = "#000000"
+        else:
+            card_bg = self.get_color('card_background')
+            text_color = self.get_color('text_primary')
+            
+        # Use theme-specific accent color if available
+        if provider:
+            border_color = self.get_accent_color(provider, border_color)
+            
         return f"""
         QFrame {{
-            background-color: {self.get_color('card_background')};
+            background-color: {card_bg};
             border: 2px solid {border_color};
             border-radius: 10px;
         }}
         QFrame:hover {{
-            background-color: {self.get_color('card_hover', self.get_color('card_background'))};
+            background-color: {self.get_color('card_hover', card_bg)};
             border: 2px solid {border_color};
         }}
         QFrame > QLabel {{
-            color: {self.get_color('text_primary')};
+            color: {text_color};
             border: none !important;
             background: transparent;
             padding: 0px;
         }}
         QFrame QLabel {{
+            color: {text_color} !important;
             border: none !important;
+        }}
+        /* Ensure all text in cards uses theme color */
+        QFrame * {{
+            color: {text_color};
         }}
         QFrame QWidget {{
             border: none !important;
             background: transparent;
         }}
         QFrame QProgressBar {{
-            border: 1px solid #e0e0e0;
-            background-color: #e0e0e0;
+            border: 1px solid {self.get_color('border')};
+            background-color: {self.get_color('border')};
+            color: {text_color};
+        }}
+        QProgressBar {{
+            color: {text_color} !important;
+        }}
+        QListWidget {{
+            background-color: transparent;
+            color: {text_color};
         }}
         """
         

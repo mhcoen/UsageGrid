@@ -25,8 +25,17 @@ class ContributionHeatmap(QWidget):
     def __init__(self):
         super().__init__()
         self.contributions = {}  # date -> count
-        self.setFixedHeight(75)  # Proper height to show all 7 days
+        self.setFixedHeight(80)  # Proper height to show all 7 days with margin
         self.setMinimumWidth(195)  # Further reduced to fit within card borders
+        self.theme_colors = {
+            'background': QColor(255, 255, 255),
+            'text': QColor(100, 100, 100),
+            'empty': QColor(234, 234, 234),
+            'level1': QColor(198, 228, 139),
+            'level2': QColor(123, 201, 111),
+            'level3': QColor(35, 154, 59),
+            'level4': QColor(25, 97, 39)
+        }
         
     def set_data(self, contributions: Dict[str, int]):
         """Set contribution data"""
@@ -44,8 +53,8 @@ class ContributionHeatmap(QWidget):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         
-        # Light background for now
-        painter.fillRect(self.rect(), QColor(255, 255, 255))
+        # Use theme background
+        painter.fillRect(self.rect(), self.theme_colors['background'])
         
         # Cell size
         cell_size = 8
@@ -74,7 +83,7 @@ class ContributionHeatmap(QWidget):
         
         # Draw day labels (Mon, Wed, Fri)
         painter.setFont(QFont("Arial", 8))
-        painter.setPen(QColor(100, 100, 100))  # Gray text
+        painter.setPen(self.theme_colors['text'])
         
         # Monday (row 1)
         painter.drawText(5, start_y + 1 * (cell_size + cell_spacing) + 6, "Mon")
@@ -85,7 +94,7 @@ class ContributionHeatmap(QWidget):
         
         # Draw month labels
         painter.setFont(QFont("Arial", 10))
-        painter.setPen(QColor(100, 100, 100))  # Gray text for light theme
+        painter.setPen(self.theme_colors['text'])
         
         # Track months as we iterate - only show first occurrence
         current_month = None
@@ -120,17 +129,17 @@ class ContributionHeatmap(QWidget):
                 x = start_x + week_offset * (cell_size + cell_spacing)
                 y = start_y + day_of_week * (cell_size + cell_spacing)
                 
-                # Light theme colors (GitHub style)
+                # Use theme colors
                 if count == 0:
-                    color = QColor(235, 237, 240)    # Light gray
+                    color = self.theme_colors['empty']
                 elif count <= 3:
-                    color = QColor(155, 233, 168)    # Light green
+                    color = self.theme_colors['level1']
                 elif count <= 6:
-                    color = QColor(64, 196, 99)      # Medium green
+                    color = self.theme_colors['level2']
                 elif count <= 9:
-                    color = QColor(48, 161, 78)      # Dark green
+                    color = self.theme_colors['level3']
                 else:
-                    color = QColor(33, 110, 57)      # Very dark green
+                    color = self.theme_colors['level4']
                     
                 painter.fillRect(x, y, cell_size, cell_size, color)
                 
@@ -146,7 +155,7 @@ class GitHubCard(BaseProviderCard):
         super().__init__(
             provider_name="github",
             display_name="GitHub",
-            color="#24292e",
+            color="#673ab7",  # Deep purple
             size=(220, 210),  # Back to standard width
             show_status=False  # Don't show the status text since we display commits in title
         )
@@ -157,16 +166,50 @@ class GitHubCard(BaseProviderCard):
         else:
             self.token = os.getenv("GITHUB_TOKEN", "")
             self.username = os.getenv("GITHUB_USERNAME", "")
+            
+    def update_theme_colors(self, is_dark: bool):
+        """Update heatmap colors based on theme"""
+        if is_dark:
+            # Get the parent window to access theme manager
+            parent = self.window()
+            if parent and hasattr(parent, 'theme_manager'):
+                # Use the card background color from the theme
+                card_bg = parent.theme_manager.get_color('card_background')
+                # Parse the color string to create QColor
+                bg_color = QColor(card_bg)
+            else:
+                bg_color = QColor(30, 30, 30)
+                
+            self.heatmap.theme_colors = {
+                'background': bg_color,
+                'text': QColor(180, 180, 180),
+                'empty': QColor(50, 50, 50),
+                'level1': QColor(14, 68, 41),
+                'level2': QColor(0, 109, 50),
+                'level3': QColor(38, 166, 65),
+                'level4': QColor(57, 211, 83)
+            }
+        else:
+            self.heatmap.theme_colors = {
+                'background': QColor(255, 255, 255),
+                'text': QColor(100, 100, 100),
+                'empty': QColor(234, 234, 234),
+                'level1': QColor(198, 228, 139),
+                'level2': QColor(123, 201, 111),
+                'level3': QColor(35, 154, 59),
+                'level4': QColor(25, 97, 39)
+            }
+        self.heatmap.update()
         
     def setup_content(self):
         """Add GitHub-specific content"""
         # Today's contributions
         self.contributions_label = QLabel("Today: -")
         font = QFont()
-        font.setPointSize(self.base_font_sizes['title'])  # Same size as title
+        font.setPointSize(self.base_font_sizes['title'] - 1)  # 1pt smaller than title
         font.setBold(True)
         self.contributions_label.setFont(font)
-        self.contributions_label.setStyleSheet("color: #333;")
+        # Color will be set by theme
         self.layout.addWidget(self.contributions_label)
         
         # Contribution heatmap
@@ -183,15 +226,15 @@ class GitHubCard(BaseProviderCard):
         stats_layout.setSpacing(10)
         
         self.prs_label = QLabel("PRs: -")
-        self.prs_label.setStyleSheet(f"color: #666; font-size: {self.base_font_sizes['small']}px;")
+        self.prs_label.setStyleSheet(f" font-size: {self.base_font_sizes['small']}px;")
         stats_layout.addWidget(self.prs_label)
         
         self.issues_label = QLabel("Issues: -")
-        self.issues_label.setStyleSheet(f"color: #666; font-size: {self.base_font_sizes['small']}px;")
+        self.issues_label.setStyleSheet(f" font-size: {self.base_font_sizes['small']}px;")
         stats_layout.addWidget(self.issues_label)
         
         self.notifs_label = QLabel("Notifs: -")
-        self.notifs_label.setStyleSheet(f"color: #666; font-size: {self.base_font_sizes['small']}px;")
+        self.notifs_label.setStyleSheet(f" font-size: {self.base_font_sizes['small']}px;")
         stats_layout.addWidget(self.notifs_label)
         
         stats_layout.addStretch()
@@ -200,15 +243,15 @@ class GitHubCard(BaseProviderCard):
         
         # Recent commits
         self.recent_label = QLabel("Recent:")
-        self.recent_label.setStyleSheet(f"color: #666; font-size: {self.base_font_sizes['small']}px; margin-top: 5px;")
+        self.recent_label.setStyleSheet(f" font-size: {self.base_font_sizes['small']}px; margin-top: 5px;")
         self.layout.addWidget(self.recent_label)
         
         self.commit1_label = QLabel("...")
-        self.commit1_label.setStyleSheet(f"color: #666; font-size: {self.base_font_sizes['small'] - 1}px;")
+        self.commit1_label.setStyleSheet(f" font-size: {self.base_font_sizes['small'] - 1}px;")
         self.layout.addWidget(self.commit1_label)
         
         self.commit2_label = QLabel("...")
-        self.commit2_label.setStyleSheet(f"color: #666; font-size: {self.base_font_sizes['small'] - 1}px;")
+        self.commit2_label.setStyleSheet(f" font-size: {self.base_font_sizes['small'] - 1}px;")
         self.layout.addWidget(self.commit2_label)
         
     def fetch_data(self) -> Dict[str, Any]:
@@ -259,6 +302,11 @@ class GitHubCard(BaseProviderCard):
                 )
                 if events_resp.status_code == 200:
                     events = events_resp.json()
+                    # Debug: log recent push events
+                    push_events = [e for e in events if e['type'] == 'PushEvent']
+                    if push_events:
+                        recent_repos = [e['repo']['name'] for e in push_events[:5]]
+                        logger.debug(f"Recent push events from repos: {recent_repos}")
             except Exception as e:
                 logger.error(f"Error fetching events: {e}")
             
@@ -455,20 +503,20 @@ class GitHubCard(BaseProviderCard):
         
     def scale_content_fonts(self, scale: float):
         """Scale the content fonts"""
-        # Scale contributions (same as title size)
+        # Scale contributions (1pt smaller than title)
         font = QFont()
-        font.setPointSize(int(self.base_font_sizes['title'] * scale))
+        font.setPointSize(int((self.base_font_sizes['title'] - 1) * scale))
         font.setBold(True)
         self.contributions_label.setFont(font)
         
         # Scale stats
         size = int(self.base_font_sizes['small'] * scale)
-        self.prs_label.setStyleSheet(f"color: #666; font-size: {size}px;")
-        self.issues_label.setStyleSheet(f"color: #666; font-size: {size}px;")
-        self.notifs_label.setStyleSheet(f"color: #666; font-size: {size}px;")
-        self.recent_label.setStyleSheet(f"color: #666; font-size: {size}px; margin-top: 5px;")
+        self.prs_label.setStyleSheet(f" font-size: {size}px;")
+        self.issues_label.setStyleSheet(f" font-size: {size}px;")
+        self.notifs_label.setStyleSheet(f" font-size: {size}px;")
+        self.recent_label.setStyleSheet(f" font-size: {size}px; margin-top: 5px;")
         
         # Scale commits
         size = int((self.base_font_sizes['small'] - 1) * scale)
-        self.commit1_label.setStyleSheet(f"color: #666; font-size: {size}px;")
-        self.commit2_label.setStyleSheet(f"color: #666; font-size: {size}px;")
+        self.commit1_label.setStyleSheet(f" font-size: {size}px;")
+        self.commit2_label.setStyleSheet(f" font-size: {size}px;")

@@ -86,8 +86,14 @@ class ClaudeCodeCard(BaseProviderCard):
         super().__init__(
             provider_name="anthropic",
             display_name=f"Claude Code: {plan_display}",
-            color="#e16e3d"
+            color="#ff6b35"  # Vibrant orange
         )
+        
+        # Theme colors
+        self.progress_bar_bg = "#e0e0e0"
+        self.progress_bar_text = "#000000"
+        self.time_bar_bg = "#e0e0e0"
+        self.time_bar_chunk = "#6c757d"
         
         # Timer to update time remaining
         self.time_update_timer = QTimer()
@@ -141,12 +147,12 @@ class ClaudeCodeCard(BaseProviderCard):
         
         # Token count
         self.token_label = QLabel("Tokens: -")
-        self.token_label.setStyleSheet(f"color: #666; font-size: {self.base_font_sizes['secondary'] - 1}px;")
+        self.token_label.setStyleSheet(f"font-size: {self.base_font_sizes['secondary'] - 1}px;")
         self.layout.addWidget(self.token_label)
         
         # 2. Session time progress bar
         self.time_label = QLabel("Session Time")
-        self.time_label.setStyleSheet(f"color: #666; font-size: {self.base_font_sizes['small']}px; margin-top: 2px;")
+        self.time_label.setStyleSheet(f" font-size: {self.base_font_sizes['small']}px; margin-top: 2px;")
         self.layout.addWidget(self.time_label)
         
         self.time_progress_bar = QProgressBar()
@@ -155,25 +161,17 @@ class ClaudeCodeCard(BaseProviderCard):
         self.time_progress_bar.setMaximumHeight(12)
         self.time_progress_bar.setTextVisible(True)
         self.time_progress_bar.setFormat("%p%")
-        self.time_progress_bar.setStyleSheet("""
-            QProgressBar {
-                background-color: #e0e0e0;
-                text-align: center;
-            }
-            QProgressBar::chunk {
-                background-color: #6c757d;
-            }
-        """)
+        # Initial styling will be set by theme
         self.layout.addWidget(self.time_progress_bar)
         
         # Time remaining (right after session time bar)
         self.time_remaining_label = QLabel("Time left: -")
-        self.time_remaining_label.setStyleSheet(f"color: #666; font-size: {self.base_font_sizes['small']}px;")
+        self.time_remaining_label.setStyleSheet(f" font-size: {self.base_font_sizes['small']}px;")
         self.layout.addWidget(self.time_remaining_label)
         
         # 3. Model usage horizontal bar
         self.model_label = QLabel("Model Usage")
-        self.model_label.setStyleSheet(f"color: #666; font-size: {self.base_font_sizes['small']}px; margin-top: 2px;")
+        self.model_label.setStyleSheet(f" font-size: {self.base_font_sizes['small']}px; margin-top: 2px;")
         self.layout.addWidget(self.model_label)
         
         self.model_graph = ModelUsageGraph()
@@ -187,12 +185,12 @@ class ClaudeCodeCard(BaseProviderCard):
         
         # Prediction
         self.prediction_label = QLabel("Prediction: -")
-        self.prediction_label.setStyleSheet(f"color: #666; font-size: {self.base_font_sizes['small']}px;")
+        self.prediction_label.setStyleSheet(f" font-size: {self.base_font_sizes['small']}px;")
         self.layout.addWidget(self.prediction_label)
         
         # New session info
         self.new_session_label = QLabel("")
-        self.new_session_label.setStyleSheet(f"color: #666; font-size: {self.base_font_sizes['small']}px;")
+        self.new_session_label.setStyleSheet(f" font-size: {self.base_font_sizes['small']}px;")
         self.layout.addWidget(self.new_session_label)
         
     def update_display(self, data: Dict[str, Any]):
@@ -239,36 +237,7 @@ class ClaudeCodeCard(BaseProviderCard):
         self.progress_bar.setValue(int(token_percentage))
         
         # Color code the progress bar based on token usage
-        if token_percentage >= 90:
-            self.progress_bar.setStyleSheet("""
-                QProgressBar {
-                    background-color: #e0e0e0;
-                    text-align: center;
-                }
-                QProgressBar::chunk {
-                    background-color: #dc3545;
-                }
-            """)  # Red
-        elif token_percentage >= 75:
-            self.progress_bar.setStyleSheet("""
-                QProgressBar {
-                    background-color: #e0e0e0;
-                    text-align: center;
-                }
-                QProgressBar::chunk {
-                    background-color: #ff6b35;
-                }
-            """)  # Orange
-        else:
-            self.progress_bar.setStyleSheet("""
-                QProgressBar {
-                    background-color: #e0e0e0;
-                    text-align: center;
-                }
-                QProgressBar::chunk {
-                    background-color: #28a745;
-                }
-            """)  # Green
+        self._update_progress_bar_color(token_percentage)
         
         # Update tokens
         if tokens > 0:
@@ -356,10 +325,10 @@ class ClaudeCodeCard(BaseProviderCard):
                     self.prediction_label.setStyleSheet(f"color: #28a745; font-size: {self.get_font_size()}px;")
             else:
                 self.prediction_label.setText("Rate: Stable")
-                self.prediction_label.setStyleSheet(f"color: #666; font-size: {self.get_font_size()}px;")
+                self.prediction_label.setStyleSheet(f" font-size: {self.get_font_size()}px;")
         else:
             self.prediction_label.setText("Prediction: Calculating...")
-            self.prediction_label.setStyleSheet("color: #666; font-size: 11px;")
+            self.prediction_label.setStyleSheet(" font-size: 11px;")
             
         # Show when the next session starts (after current session ends)
         # Convert session_end (UTC) to local time for display
@@ -373,13 +342,13 @@ class ClaudeCodeCard(BaseProviderCard):
     def scale_content_fonts(self, scale: float):
         """Scale Claude Code specific fonts"""
         # Scale token label (1pt smaller than secondary)
-        self.token_label.setStyleSheet(f"color: #666; font-size: {int((self.base_font_sizes['secondary'] - 1) * scale)}px;")
+        self.token_label.setStyleSheet(f" font-size: {int((self.base_font_sizes['secondary'] - 1) * scale)}px;")
         
         # Scale time labels
-        self.time_label.setStyleSheet(f"color: #666; font-size: {int(self.base_font_sizes['small'] * scale)}px; margin-top: 2px;")
-        self.time_remaining_label.setStyleSheet(f"color: #666; font-size: {int(self.base_font_sizes['small'] * scale)}px;")
-        self.new_session_label.setStyleSheet(f"color: #666; font-size: {int(self.base_font_sizes['small'] * scale)}px;")
-        self.model_label.setStyleSheet(f"color: #666; font-size: {int(self.base_font_sizes['small'] * scale)}px; margin-top: 2px;")
+        self.time_label.setStyleSheet(f" font-size: {int(self.base_font_sizes['small'] * scale)}px; margin-top: 2px;")
+        self.time_remaining_label.setStyleSheet(f" font-size: {int(self.base_font_sizes['small'] * scale)}px;")
+        self.new_session_label.setStyleSheet(f" font-size: {int(self.base_font_sizes['small'] * scale)}px;")
+        self.model_label.setStyleSheet(f" font-size: {int(self.base_font_sizes['small'] * scale)}px; margin-top: 2px;")
         self.model_legend.setStyleSheet(f"font-size: {int((self.base_font_sizes['small'] - 1) * scale)}px;")
         
         # Scale prediction label with special handling for its dynamic styling
@@ -389,4 +358,58 @@ class ClaudeCodeCard(BaseProviderCard):
         elif "color: #28a745" in current_style:  # Green
             self.prediction_label.setStyleSheet(f"color: #28a745; font-size: {int(self.base_font_sizes['small'] * scale)}px;")
         else:  # Default
-            self.prediction_label.setStyleSheet(f"color: #666; font-size: {int(self.base_font_sizes['small'] * scale)}px;")
+            self.prediction_label.setStyleSheet(f" font-size: {int(self.base_font_sizes['small'] * scale)}px;")
+            
+    def update_theme_colors(self, is_dark: bool):
+        """Update progress bar colors based on theme"""
+        if is_dark:
+            # Dark theme - use lighter backgrounds and white text
+            self.progress_bar_bg = "#404040"
+            self.progress_bar_text = "#ffffff"
+            self.time_bar_bg = "#404040"
+            self.time_bar_chunk = "#808080"
+        else:
+            # Light theme - use darker text on light backgrounds
+            self.progress_bar_bg = "#e0e0e0"
+            self.progress_bar_text = "#000000"
+            self.time_bar_bg = "#e0e0e0"
+            self.time_bar_chunk = "#6c757d"
+            
+        # Update time progress bar
+        self.time_progress_bar.setStyleSheet(f"""
+            QProgressBar {{
+                background-color: {self.time_bar_bg};
+                text-align: center;
+                color: {self.progress_bar_text};
+                font-size: {self.base_font_sizes['small'] - 1}px;
+            }}
+            QProgressBar::chunk {{
+                background-color: {self.time_bar_chunk};
+            }}
+        """)
+        
+        # Re-apply token progress bar color with theme
+        if hasattr(self, 'current_tokens'):
+            token_percentage = (self.current_tokens / self.token_limit * 100) if self.token_limit > 0 else 0
+            self._update_progress_bar_color(token_percentage)
+            
+    def _update_progress_bar_color(self, token_percentage: float):
+        """Update progress bar color based on percentage"""
+        if token_percentage >= 90:
+            chunk_color = "#dc3545"  # Red
+        elif token_percentage >= 75:
+            chunk_color = "#ff6b35"  # Orange
+        else:
+            chunk_color = "#28a745"  # Green
+            
+        self.progress_bar.setStyleSheet(f"""
+            QProgressBar {{
+                background-color: {self.progress_bar_bg};
+                text-align: center;
+                color: {self.progress_bar_text};
+                font-size: {self.base_font_sizes['small'] - 1}px;
+            }}
+            QProgressBar::chunk {{
+                background-color: {chunk_color};
+            }}
+        """)

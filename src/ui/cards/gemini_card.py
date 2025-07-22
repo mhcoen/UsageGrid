@@ -20,7 +20,7 @@ class GeminiCard(BaseProviderCard):
         super().__init__(
             provider_name="gemini",
             display_name="Gemini",
-            color="#4285f4",
+            color="#2196f3",  # Bright blue
             size=(220, 104)  # Half-height
         )
         self.api_key = os.getenv("GOOGLE_CLOUD_PROJECT", "")
@@ -33,13 +33,13 @@ class GeminiCard(BaseProviderCard):
         font = QFont()
         font.setPointSize(self.base_font_sizes['secondary'])  # Smaller font for half-height
         self.cost_label.setFont(font)
-        self.cost_label.setStyleSheet("color: #000; font-weight: bold;")
+        self.cost_label.setStyleSheet(" font-weight: bold;")
         self.layout.addWidget(self.cost_label)
         
         # Requests display
         self.requests_label = QLabel("Requests: -")
         self.requests_label.setTextFormat(Qt.TextFormat.RichText)
-        self.requests_label.setStyleSheet(f"color: #666; font-size: {self.base_font_sizes['secondary']}px;")
+        self.requests_label.setStyleSheet(f" font-size: {self.base_font_sizes['secondary']}px;")
         self.layout.addWidget(self.requests_label)
         
     def update_display(self, data: Dict[str, Any]):
@@ -76,7 +76,7 @@ class GeminiCard(BaseProviderCard):
         
         # Scale requests label
         self.requests_label.setStyleSheet(
-            f"color: #666; font-size: {int(self.base_font_sizes['secondary'] * scale)}px;"
+            f" font-size: {int(self.base_font_sizes['secondary'] * scale)}px;"
         )
         
         # Update rich text with new sizes

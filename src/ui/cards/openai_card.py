@@ -17,6 +17,7 @@ class BarChartWidget(QWidget):
         self.data = {}  # {date_str: value}
         self.setMinimumHeight(50)
         self.setMaximumHeight(60)
+        self.text_color = QColor(100, 100, 100)  # Default text color
         
     def set_data(self, data: Dict[str, float]):
         """Set the data to display"""
@@ -62,7 +63,7 @@ class BarChartWidget(QWidget):
             # Draw date label
             date_obj = datetime.fromisoformat(date_str)
             label = date_obj.strftime("%m/%d")
-            painter.setPen(QPen(QColor(100, 100, 100)))
+            painter.setPen(QPen(self.text_color))
             painter.setFont(QFont("Arial", 8))
             label_rect = painter.boundingRect(x, self.height() - 15, bar_width_int, 15, 
                                             Qt.AlignmentFlag.AlignCenter, label)
@@ -70,6 +71,7 @@ class BarChartWidget(QWidget):
             
             # Draw value on top of bar if it's tall enough
             if bar_height > 20 and value > 0:
+                # Use contrasting color for text on bars
                 painter.setPen(QPen(QColor(255, 255, 255)))
                 painter.setFont(QFont("Arial", 9, QFont.Weight.Bold))
                 value_text = f"${value:.2f}" if value < 100 else f"${int(value)}"
@@ -85,7 +87,7 @@ class OpenAICard(BaseProviderCard):
         super().__init__(
             provider_name="openai",
             display_name="OpenAI",
-            color="#10a37f"
+            color="#00a67e"  # Teal green
         )
         
     def setup_content(self):
@@ -93,9 +95,9 @@ class OpenAICard(BaseProviderCard):
         # Cost display - use a size between primary and title
         self.cost_label = QLabel("$0.0000")
         font = QFont()
-        font.setPointSize(20)  # Reduced from 24
+        font.setPointSize(14)  # Further reduced for better balance
         self.cost_label.setFont(font)
-        self.cost_label.setStyleSheet("color: #000; font-weight: bold;")
+        self.cost_label.setStyleSheet("font-weight: bold;")
         self.layout.addWidget(self.cost_label)
         
         # Add small spacing after price
@@ -103,7 +105,7 @@ class OpenAICard(BaseProviderCard):
         
         # Token count
         self.token_label = QLabel("Tokens: -")
-        self.token_label.setStyleSheet(f"color: #666; font-size: {self.base_font_sizes['secondary']}px;")
+        self.token_label.setStyleSheet(f"font-size: {self.base_font_sizes['secondary']}px;")
         self.layout.addWidget(self.token_label)
         
         # Add spacing before chart section
@@ -111,7 +113,7 @@ class OpenAICard(BaseProviderCard):
         
         # Weekly chart label
         self.chart_label = QLabel("Past 7 days:")
-        self.chart_label.setStyleSheet(f"color: #666; font-size: {self.base_font_sizes['small']}px;")
+        self.chart_label.setStyleSheet(f"font-size: {self.base_font_sizes['small']}px;")
         self.layout.addWidget(self.chart_label)
         
         # Bar chart
@@ -169,13 +171,21 @@ class OpenAICard(BaseProviderCard):
         else:
             self.chart_label.setText("Past 7 days:")
             
+    def update_theme_colors(self, is_dark: bool):
+        """Update chart colors based on theme"""
+        if is_dark:
+            self.bar_chart.text_color = QColor(180, 180, 180)
+        else:
+            self.bar_chart.text_color = QColor(100, 100, 100)
+        self.bar_chart.update()
+            
     def scale_content_fonts(self, scale: float):
         """Scale OpenAI-specific fonts"""
-        # Scale cost label - using custom 20pt base size
+        # Scale cost label - using custom 14pt base size
         font = QFont()
-        font.setPointSize(int(20 * scale))
+        font.setPointSize(int(14 * scale))
         self.cost_label.setFont(font)
         
         # Scale other labels
-        self.token_label.setStyleSheet(f"color: #666; font-size: {int(self.base_font_sizes['secondary'] * scale)}px;")
-        self.chart_label.setStyleSheet(f"color: #666; font-size: {int(self.base_font_sizes['small'] * scale)}px;")
+        self.token_label.setStyleSheet(f"font-size: {int(self.base_font_sizes['secondary'] * scale)}px;")
+        self.chart_label.setStyleSheet(f"font-size: {int(self.base_font_sizes['small'] * scale)}px;")

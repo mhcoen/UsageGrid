@@ -26,16 +26,16 @@ class SimpleCard(BaseProviderCard):
         if self.show_estimated:
             self.cost_label.setTextFormat(Qt.TextFormat.RichText)
         font = QFont()
-        font.setPointSize(self.base_font_sizes['primary'] if not self.is_half_height else self.base_font_sizes['secondary'])
+        font.setPointSize(19 if not self.is_half_height else self.base_font_sizes['secondary'])
         self.cost_label.setFont(font)
-        self.cost_label.setStyleSheet("color: #000; font-weight: bold;")
+        self.cost_label.setStyleSheet("font-weight: bold;")
         self.layout.addWidget(self.cost_label)
         
         # Metric display (tokens/requests)
         self.metric_label = QLabel(f"{self.metric_name}: -")
         if self.show_estimated and self.metric_name == "Requests":
             self.metric_label.setTextFormat(Qt.TextFormat.RichText)
-        self.metric_label.setStyleSheet(f"color: #666; font-size: {self.base_font_sizes['secondary']}px;")
+        self.metric_label.setStyleSheet(f"font-size: {self.base_font_sizes['secondary']}px;")
         self.layout.addWidget(self.metric_label)
         
     def update_display(self, data: Dict[str, Any]):
@@ -73,7 +73,7 @@ class SimpleCard(BaseProviderCard):
         """Scale the content fonts"""
         # Scale cost label
         font = QFont()
-        base_size = self.base_font_sizes['primary'] if not self.is_half_height else self.base_font_sizes['secondary']
+        base_size = 19 if not self.is_half_height else self.base_font_sizes['secondary']
         font.setPointSize(int(base_size * scale))
         self.cost_label.setFont(font)
         

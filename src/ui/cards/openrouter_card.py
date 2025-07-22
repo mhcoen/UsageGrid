@@ -16,7 +16,7 @@ class OpenRouterCard(BaseProviderCard):
         super().__init__(
             provider_name="openrouter",
             display_name="OpenRouter",
-            color="#ee4b2b",
+            color="#e91e63",  # Pink/Magenta
             size=size
         )
         
@@ -25,20 +25,20 @@ class OpenRouterCard(BaseProviderCard):
         # Cost display
         self.cost_label = QLabel("$0.00")
         font = QFont()
-        font.setPointSize(self.base_font_sizes['primary'] if not self.is_half_height else self.base_font_sizes['secondary'])
+        font.setPointSize(19 if not self.is_half_height else self.base_font_sizes['secondary'])
         self.cost_label.setFont(font)
-        self.cost_label.setStyleSheet("color: #000; font-weight: bold;")
+        self.cost_label.setStyleSheet(" font-weight: bold;")
         self.layout.addWidget(self.cost_label)
         
         # Always show additional info, just with smaller font for half-height
         # Limit info
         self.limit_label = QLabel("")
-        self.limit_label.setStyleSheet(f"color: #666; font-size: {self.base_font_sizes['small']}px;")
+        self.limit_label.setStyleSheet(f" font-size: {self.base_font_sizes['small']}px;")
         self.layout.addWidget(self.limit_label)
         
         # Rate limit info
         self.rate_limit_label = QLabel("")
-        self.rate_limit_label.setStyleSheet(f"color: #666; font-size: {self.base_font_sizes['small']}px;")
+        self.rate_limit_label.setStyleSheet(f" font-size: {self.base_font_sizes['small']}px;")
         self.rate_limit_label.setWordWrap(True)
         self.layout.addWidget(self.rate_limit_label)
         
@@ -107,13 +107,13 @@ class OpenRouterCard(BaseProviderCard):
         """Scale OpenRouter-specific fonts"""
         # Scale cost label
         font = QFont()
-        font.setPointSize(int(self.base_font_sizes['primary'] * scale))
+        font.setPointSize(int(19 * scale))
         self.cost_label.setFont(font)
         
         # Scale other labels if they exist
         if hasattr(self, 'limit_label'):
-            self.limit_label.setStyleSheet(f"color: #666; font-size: {int(self.base_font_sizes['small'] * scale)}px;")
+            self.limit_label.setStyleSheet(f" font-size: {int(self.base_font_sizes['small'] * scale)}px;")
         if hasattr(self, 'rate_limit_label'):
-            self.rate_limit_label.setStyleSheet(f"color: #666; font-size: {int(self.base_font_sizes['small'] * scale)}px;")
+            self.rate_limit_label.setStyleSheet(f" font-size: {int(self.base_font_sizes['small'] * scale)}px;")
         if hasattr(self, 'free_tier_label'):
             self.free_tier_label.setStyleSheet(f"color: #28a745; font-size: {int(self.base_font_sizes['small'] * scale)}px; font-weight: bold;")

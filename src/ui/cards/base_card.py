@@ -21,7 +21,7 @@ class BaseProviderCard(QFrame):
         self.width, self.height = size
         self.show_status = show_status
         self.base_font_sizes = {
-            'title': 16,
+            'title': 15,
             'primary': 24,
             'secondary': 13,
             'small': 11
@@ -44,7 +44,7 @@ class BaseProviderCard(QFrame):
         font.setPointSize(self.base_font_sizes['title'])
         font.setBold(True)
         self.title_label.setFont(font)
-        self.title_label.setStyleSheet("color: #333;")
+        # Title color will be set by theme
         self.layout.addWidget(self.title_label)
         
         # Let subclasses add their content
@@ -88,7 +88,7 @@ class BaseProviderCard(QFrame):
         elif status_type == "error":
             self.status_label.setStyleSheet(f"color: #dc3545; font-size: {self.base_font_sizes['secondary']}px;")
         elif status_type == "italic":
-            self.status_label.setStyleSheet(f"color: gray; font-size: {self.base_font_sizes['secondary'] - 1}px; font-style: italic;")
+            self.status_label.setStyleSheet(f"color: gray; font-size: {self.base_font_sizes['secondary'] - 2}px; font-style: italic;")
         else:
             self.status_label.setStyleSheet(f"color: gray; font-size: {self.base_font_sizes['secondary']}px;")
             
