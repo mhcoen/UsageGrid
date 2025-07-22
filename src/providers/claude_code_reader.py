@@ -362,7 +362,7 @@ class ClaudeCodeReader:
                                         timestamp = timestamp.replace(tzinfo=None)
                                     if timestamp < since_date:
                                         if entries_processed == 0:
-                                            # Skipping old entry
+                                            pass  # Skipping old entry
                                         continue
                             
                             # Only deduplicate entries within the time window
