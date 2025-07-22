@@ -104,31 +104,28 @@ def find_session_start(now: datetime, claude_dir: Path = None) -> datetime:
     # Sort timestamps chronologically
     all_timestamps.sort()
     
-    # Find session starts by looking for gaps
+    # Find session starts
+    # Sessions start on the hour and last 5 hours
     session_starts = []
     
-    for i, timestamp in enumerate(all_timestamps):
-        if i == 0:
-            # First message ever starts a session (rounded down to hour)
-            session_starts.append(timestamp.replace(minute=0, second=0, microsecond=0))
-        else:
-            # Check if this message is in the previous session
-            # Find the most recent session start before this timestamp
-            prev_session_start = None
-            for session_start in reversed(session_starts):
-                if session_start <= timestamp:
-                    prev_session_start = session_start
-                    break
-            
-            if prev_session_start:
-                # Check if previous session has expired
-                prev_session_end = prev_session_start + timedelta(hours=5)
-                if timestamp > prev_session_end:
-                    # This message starts a new session (rounded down to hour)
-                    session_starts.append(timestamp.replace(minute=0, second=0, microsecond=0))
-            else:
-                # Shouldn't happen, but handle it
-                session_starts.append(timestamp)
+    for timestamp in all_timestamps:
+        # Round this timestamp down to the hour
+        hour_aligned = timestamp.replace(minute=0, second=0, microsecond=0)
+        
+        # Check if this timestamp fits in any existing session
+        fits_in_existing = False
+        for session_start in session_starts:
+            session_end = session_start + timedelta(hours=5)
+            if session_start <= hour_aligned < session_end:
+                fits_in_existing = True
+                break
+        
+        # If it doesn't fit in any existing session, it starts a new one
+        if not fits_in_existing:
+            session_starts.append(hour_aligned)
+    
+    # Sort session starts
+    session_starts.sort()
     
     # Find the current active session
     current_session_start = None
@@ -148,9 +145,7 @@ def find_session_start(now: datetime, claude_dir: Path = None) -> datetime:
         # Clear cache since there's no active session
         _session_cache['session_start'] = None
         _session_cache['session_end'] = None
-        return now
-    
-    # Round down to the nearest hour
-    current_session_start = current_session_start.replace(minute=0, second=0, microsecond=0)
+        # Return current time rounded down to hour (would be start of new session)
+        return now.replace(minute=0, second=0, microsecond=0)
     
     return current_session_start
