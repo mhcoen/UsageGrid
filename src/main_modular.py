@@ -144,6 +144,7 @@ class ModularMainWindow(QMainWindow):
         
         self.setup_ui()
         self.setup_timers()
+        self.setup_keyboard_shortcuts()
         
         # Initial theme
         self.apply_theme()
@@ -310,6 +311,14 @@ class ModularMainWindow(QMainWindow):
         self.cleanup_timer = QTimer()
         self.cleanup_timer.timeout.connect(self.cleanup_cache)
         self.cleanup_timer.start(1800000)  # 30 minutes
+        
+    def setup_keyboard_shortcuts(self):
+        """Setup keyboard shortcuts"""
+        # Quit shortcuts
+        QShortcut(QKeySequence.StandardKey.Quit, self, self.close)  # Cmd+Q on Mac, Ctrl+Q on others
+        QShortcut(QKeySequence("Ctrl+C"), self, self.close)  # Ctrl+C
+        QShortcut(QKeySequence("Ctrl+W"), self, self.close)  # Ctrl+W
+        QShortcut(QKeySequence("Esc"), self, self.close)  # Escape
         
     def scale_fonts(self, factor):
         """Scale all fonts by factor"""
@@ -803,24 +812,14 @@ def main():
         window = ModularMainWindow()
         window.show()
         
-        # Handle Ctrl+C gracefully
+        # Handle Ctrl+C in terminal gracefully
         def signal_handler(sig, frame):
-            print("\nShutting down gracefully...")
-            # Stop timers
-            if hasattr(window, 'api_timer'):
-                window.api_timer.stop()
-            if hasattr(window, 'claude_timer'):
-                window.claude_timer.stop()
-            # Stop worker thread
-            if hasattr(window, 'claude_worker'):
-                window.claude_worker.stop()
-            # Close window
             window.close()
             app.quit()
         
         signal.signal(signal.SIGINT, signal_handler)
         
-        # Enable Ctrl+C handling in Qt event loop
+        # Enable signal processing in Qt event loop
         timer = QTimer()
         timer.timeout.connect(lambda: None)
         timer.start(250)  # Process signals every 250ms
