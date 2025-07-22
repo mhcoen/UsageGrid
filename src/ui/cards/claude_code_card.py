@@ -212,7 +212,7 @@ class ClaudeCodeCard(BaseProviderCard):
         model_breakdown = data.get('model_breakdown', {})
         
         # Debug logging
-        logger.debug(f"ClaudeCodeCard.update_display called with tokens={tokens}, session_cost=${session_cost:.4f}")
+        # Update display with new data
         # Get token limit from config
         plan = self.config.get("claude_code", {}).get("subscription_plan", "max20")
         plans = self.config.get("claude_code", {}).get("plans", {})
