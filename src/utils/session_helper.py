@@ -109,8 +109,8 @@ def find_session_start(now: datetime, claude_dir: Path = None) -> datetime:
     
     for i, timestamp in enumerate(all_timestamps):
         if i == 0:
-            # First message ever starts a session
-            session_starts.append(timestamp)
+            # First message ever starts a session (rounded down to hour)
+            session_starts.append(timestamp.replace(minute=0, second=0, microsecond=0))
         else:
             # Check if this message is in the previous session
             # Find the most recent session start before this timestamp
@@ -124,8 +124,8 @@ def find_session_start(now: datetime, claude_dir: Path = None) -> datetime:
                 # Check if previous session has expired
                 prev_session_end = prev_session_start + timedelta(hours=5)
                 if timestamp > prev_session_end:
-                    # This message starts a new session
-                    session_starts.append(timestamp)
+                    # This message starts a new session (rounded down to hour)
+                    session_starts.append(timestamp.replace(minute=0, second=0, microsecond=0))
             else:
                 # Shouldn't happen, but handle it
                 session_starts.append(timestamp)
@@ -149,5 +149,8 @@ def find_session_start(now: datetime, claude_dir: Path = None) -> datetime:
         _session_cache['session_start'] = None
         _session_cache['session_end'] = None
         return now
+    
+    # Round down to the nearest hour
+    current_session_start = current_session_start.replace(minute=0, second=0, microsecond=0)
     
     return current_session_start

@@ -17,7 +17,8 @@ A beautiful, real-time desktop application for monitoring usage and costs across
 - Live cost updates every 30-60 seconds
 - Beautiful bar charts and progress indicators
 - Token usage tracking and predictions
-- Session-based monitoring for Claude
+- Session-based monitoring with 5-hour billing blocks
+- Session start times rounded down to the nearest hour
 
 ### 🎨 Stunning Themes
 - 13 built-in themes including Light, Dark, Solarized, Nord, Dracula, and more

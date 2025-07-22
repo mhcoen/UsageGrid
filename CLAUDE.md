@@ -18,6 +18,12 @@ A cross-platform desktop application to monitor real-time usage and costs across
 - **OpenRouter**: Real-time (usage data included in API responses)
 - **HuggingFace**: Update frequency not specified in API docs
 
+### Session Billing Model
+- **5-hour blocks**: Message limits reset in 5-hour blocks
+- **Session start time**: Rounded down to the nearest hour (e.g., a session starting at 2:40:59 AM rounds down to 2:00:00 AM)
+- **Session duration**: Exactly 5 hours from the rounded start time
+- **Token counting**: Input + output tokens (excluding cache tokens) within the current session window
+
 ### UI Design
 - **Adaptive layout**: Scales from single provider to grid view
 - **Provider cards**: Clickable widgets with spending trends
