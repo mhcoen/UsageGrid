@@ -5,7 +5,8 @@ from abc import abstractmethod
 from typing import Dict, Any, Optional, Tuple
 from PyQt6.QtWidgets import QFrame, QVBoxLayout, QLabel
 from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QFont
+from PyQt6.QtGui import QFont, QCursor, QDesktopServices
+from PyQt6.QtCore import QUrl
 
 
 class BaseProviderCard(QFrame):
@@ -26,6 +27,14 @@ class BaseProviderCard(QFrame):
             'secondary': 13,
             'small': 11
         }
+        # Billing page URLs
+        self.billing_urls = {
+            'openai': 'https://platform.openai.com/usage',
+            'anthropic': 'https://console.anthropic.com/settings/billing',
+            'openrouter': 'https://openrouter.ai/credits',
+            'github': 'https://github.com/settings/billing',
+            'gemini': 'https://console.cloud.google.com/billing'
+        }
         self.setup_ui()
         
     def setup_ui(self):
@@ -44,7 +53,16 @@ class BaseProviderCard(QFrame):
         font.setPointSize(self.base_font_sizes['title'])
         font.setBold(True)
         self.title_label.setFont(font)
-        # Title color will be set by theme
+        
+        # Make title clickable if we have a billing URL
+        if self.provider_name in self.billing_urls:
+            self.title_label.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
+            self.title_label.setToolTip(f"Click to open {self.display_name} billing page")
+            # Enable mouse tracking for hover effect
+            self.title_label.setMouseTracking(True)
+            # Install event filter to handle clicks
+            self.title_label.installEventFilter(self)
+            
         self.layout.addWidget(self.title_label)
         
         # Let subclasses add their content
@@ -92,6 +110,29 @@ class BaseProviderCard(QFrame):
         else:
             self.status_label.setStyleSheet(f"color: gray; font-size: {self.base_font_sizes['secondary']}px;")
             
+    def eventFilter(self, source, event):
+        """Handle events for child widgets"""
+        if source == self.title_label and self.provider_name in self.billing_urls:
+            if event.type() == event.Type.MouseButtonPress:
+                if event.button() == Qt.MouseButton.LeftButton:
+                    # Open billing URL
+                    url = self.billing_urls[self.provider_name]
+                    QDesktopServices.openUrl(QUrl(url))
+                    return True
+            elif event.type() == event.Type.Enter:
+                # Add underline on hover
+                font = self.title_label.font()
+                font.setUnderline(True)
+                self.title_label.setFont(font)
+                return True
+            elif event.type() == event.Type.Leave:
+                # Remove underline
+                font = self.title_label.font()
+                font.setUnderline(False)
+                self.title_label.setFont(font)
+                return True
+        return super().eventFilter(source, event)
+    
     def mousePressEvent(self, event):
         """Handle mouse clicks"""
         if event.button() == Qt.MouseButton.LeftButton:
