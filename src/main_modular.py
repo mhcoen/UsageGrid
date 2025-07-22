@@ -601,7 +601,7 @@ class ModularMainWindow(QMainWindow):
         if data['success']:
             self.cached_claude_data = data
             self.last_claude_update = datetime.now(timezone.utc).replace(tzinfo=None)
-            logger.debug(f"Claude data received: tokens={data.get('tokens', 0)}, session_cost=${data.get('session', 0):.4f}")
+            # Claude data received
             
             # Update the Claude card
             card_data = {

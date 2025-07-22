@@ -222,7 +222,7 @@ class ClaudeCodeCard(BaseProviderCard):
         token_limit = plan_info.get("session_token_limit", 220000)
         self.token_limit = token_limit
         
-        logger.debug(f"Token limit: {token_limit}, current tokens: {tokens}, percentage: {(tokens / token_limit * 100) if token_limit > 0 else 0:.1f}%")
+        # Token usage calculated
         
         # Update session start time
         if session_start:

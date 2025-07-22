@@ -373,7 +373,7 @@ class ClaudeCodeReader:
                             if message_id and request_id:
                                 entry_id = f"{message_id}:{request_id}"
                                 if entry_id in processed_ids:
-                                    logger.debug(f"Skipping duplicate entry: {entry_id}")
+                                    # Duplicate entry skipped
                                     continue
                                 processed_ids.add(entry_id)
                             
