@@ -6,6 +6,7 @@ import sys
 import os
 import json
 import logging
+import signal
 import requests
 from datetime import datetime, timedelta, timezone
 from typing import Dict, Optional, Any
@@ -801,6 +802,28 @@ def main():
         
         window = ModularMainWindow()
         window.show()
+        
+        # Handle Ctrl+C gracefully
+        def signal_handler(sig, frame):
+            print("\nShutting down gracefully...")
+            # Stop timers
+            if hasattr(window, 'api_timer'):
+                window.api_timer.stop()
+            if hasattr(window, 'claude_timer'):
+                window.claude_timer.stop()
+            # Stop worker thread
+            if hasattr(window, 'claude_worker'):
+                window.claude_worker.stop()
+            # Close window
+            window.close()
+            app.quit()
+        
+        signal.signal(signal.SIGINT, signal_handler)
+        
+        # Enable Ctrl+C handling in Qt event loop
+        timer = QTimer()
+        timer.timeout.connect(lambda: None)
+        timer.start(250)  # Process signals every 250ms
         
         sys.exit(app.exec())
         
