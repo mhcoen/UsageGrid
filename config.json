@@ -6,22 +6,22 @@
         "name": "Pro",
         "monthly_cost": 20,
         "session_token_limit": 19000,
-        "session_cost_limit": 18.00,
+        "session_cost_limit": 18.0,
         "display_name": "Claude Pro"
       },
       "max5": {
-        "name": "Max 5×",
+        "name": "Max 5\u00d7",
         "monthly_cost": 100,
         "session_token_limit": 88000,
-        "session_cost_limit": 35.00,
-        "display_name": "Claude Max 5×"
+        "session_cost_limit": 35.0,
+        "display_name": "Claude Max 5\u00d7"
       },
       "max20": {
-        "name": "Max 20×",
+        "name": "Max 20\u00d7",
         "monthly_cost": 200,
         "session_token_limit": 220000,
-        "session_cost_limit": 140.00,
-        "display_name": "Claude Max 20×"
+        "session_cost_limit": 140.0,
+        "display_name": "Claude Max 20\u00d7"
       }
     }
   },
@@ -30,44 +30,61 @@
     "columns": 2,
     "cards": [
       {
-        "position": [0, 0],
+        "position": [
+          0,
+          0
+        ],
         "provider": "openai",
         "card_type": "openai",
         "display_name": "OpenAI",
-        "color": "#10a37f"
+        "color": "#10a37f",
+        "name": "openai"
       },
       {
-        "position": [0, 1],
+        "position": [
+          0,
+          1
+        ],
         "provider": "anthropic",
         "card_type": "claude_code",
         "display_name": "Claude Code",
-        "color": "#e16e3d"
+        "color": "#e16e3d",
+        "name": "anthropic"
       },
       {
-        "position": [1, 0],
+        "position": [
+          1,
+          0
+        ],
         "stack": [
           {
             "provider": "openrouter",
             "card_type": "openrouter",
             "display_name": "OpenRouter",
             "color": "#ee4b2b",
-            "size": "half"
+            "size": "half",
+            "name": "openrouter"
           },
           {
             "provider": "gemini",
             "card_type": "gemini",
             "display_name": "Gemini",
             "color": "#4285f4",
-            "size": "half"
+            "size": "half",
+            "name": "gemini"
           }
         ]
       },
       {
-        "position": [1, 1],
+        "position": [
+          1,
+          1
+        ],
         "provider": "github",
         "card_type": "github",
         "display_name": "GitHub",
-        "color": "#24292e"
+        "color": "#24292e",
+        "name": "github"
       }
     ]
   },
@@ -193,5 +210,5 @@
       "border": "#000000"
     }
   },
-  "default_theme": "light"
+  "default_theme": "dark"
 }
