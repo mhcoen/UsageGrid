@@ -109,7 +109,8 @@ class ClaudeCodeCard(BaseProviderCard):
         
     def _load_config(self) -> dict:
         """Load configuration"""
-        config_path = Path(__file__).parent.parent.parent / "config.json"
+        from src.core.paths import UsageGridPaths
+        config_path = UsageGridPaths.get_config_path()
         default_config = {
             "claude_code": {
                 "subscription_plan": "max20",

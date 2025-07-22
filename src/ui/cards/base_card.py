@@ -3,10 +3,61 @@ Base card class for modular provider cards
 """
 from abc import abstractmethod
 from typing import Dict, Any, Optional, Tuple
-from PyQt6.QtWidgets import QFrame, QVBoxLayout, QLabel
+from PyQt6.QtWidgets import QFrame, QVBoxLayout, QLabel, QHBoxLayout
 from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QFont, QCursor, QDesktopServices
+from PyQt6.QtGui import QFont, QCursor, QDesktopServices, QPainter, QColor, QPen, QBrush
 from PyQt6.QtCore import QUrl
+
+
+class KeyIndicator(QLabel):
+    """Small widget to show active key count with colored circle"""
+    
+    def __init__(self):
+        super().__init__()
+        self.total_keys = 0
+        self.active_keys = 0
+        self.setFixedSize(20, 20)
+        
+    def set_key_status(self, active: int, total: int):
+        """Update the key status"""
+        self.active_keys = active
+        self.total_keys = total
+        if total > 1:
+            self.setVisible(True)
+            self.update()
+        else:
+            self.setVisible(False)
+            
+    def paintEvent(self, event):
+        """Paint the colored circle with number"""
+        if self.total_keys <= 1:
+            return
+            
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        
+        # Determine color based on status
+        if self.active_keys == self.total_keys:
+            color = QColor("#4CAF50")  # Green
+        elif self.active_keys > 1:
+            color = QColor("#FF9800")  # Orange
+        elif self.active_keys == 1:
+            color = QColor("#F44336")  # Red
+        else:
+            color = QColor("#9E9E9E")  # Gray
+            
+        # Draw circle
+        painter.setPen(QPen(color.darker(120), 1))
+        painter.setBrush(QBrush(color))
+        painter.drawEllipse(1, 1, 18, 18)
+        
+        # Draw text
+        painter.setPen(QPen(Qt.GlobalColor.white))
+        font = QFont()
+        font.setPointSize(10)
+        font.setBold(True)
+        painter.setFont(font)
+        painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, str(self.active_keys))
 
 
 class BaseProviderCard(QFrame):
@@ -33,6 +84,9 @@ class BaseProviderCard(QFrame):
         self.update_interval = 300000  # Default 5 minutes
         # Whether this card should auto-update
         self.auto_update = True
+        # Multi-key support
+        self.total_keys = 0
+        self.active_keys = 0
         self.setup_ui()
         
     def setup_ui(self):
@@ -45,13 +99,25 @@ class BaseProviderCard(QFrame):
         self.layout.setContentsMargins(10, 10, 10, 10)
         self.layout.setSpacing(2)
         
-        # Add title
+        # Add title with horizontal layout for key indicator
+        title_layout = QHBoxLayout()
+        title_layout.setContentsMargins(0, 0, 0, 0)
+        title_layout.setSpacing(8)
+        
         self.title_label = QLabel(self.display_name)
         font = QFont()
         font.setPointSize(self.base_font_sizes['title'])
         font.setBold(True)
         self.title_label.setFont(font)
-        self.layout.addWidget(self.title_label)
+        title_layout.addWidget(self.title_label)
+        
+        # Key indicator widget
+        self.key_indicator = KeyIndicator()
+        self.key_indicator.setVisible(False)  # Hidden by default
+        title_layout.addWidget(self.key_indicator)
+        
+        title_layout.addStretch()
+        self.layout.addLayout(title_layout)
         
         # Let subclasses add their content
         self.setup_content()
@@ -106,6 +172,10 @@ class BaseProviderCard(QFrame):
             self.status_label.setStyleSheet(f"color: gray; font-size: {self.base_font_sizes['secondary'] - 2}px; font-style: italic;")
         else:
             self.status_label.setStyleSheet(f"color: gray; font-size: {self.base_font_sizes['secondary']}px;")
+            
+    def update_key_status(self, active_keys: int, total_keys: int):
+        """Update the key indicator"""
+        self.key_indicator.set_key_status(active_keys, total_keys)
             
     def eventFilter(self, source, event):
         """Handle events for child widgets"""

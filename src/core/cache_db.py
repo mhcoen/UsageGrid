@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, Optional
 import logging
+from src.core.paths import UsageGridPaths
 
 logger = logging.getLogger(__name__)
 
@@ -16,10 +17,8 @@ class CacheDB:
     
     def __init__(self, db_path: Optional[str] = None):
         if db_path is None:
-            # Use user's home directory
-            cache_dir = Path.home() / ".llm_cost_monitor"
-            cache_dir.mkdir(exist_ok=True)
-            db_path = cache_dir / "cache.db"
+            # Use ~/.usagegrid directory
+            db_path = UsageGridPaths.get_cache_db_path()
             
         self.db_path = str(db_path)
         self._init_db()

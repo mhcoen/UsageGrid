@@ -1,4 +1,15 @@
 {
+  "providers": {
+    "openai": {
+      "additional_keys": []
+    },
+    "openrouter": {
+      "additional_keys": []
+    },
+    "gemini": {
+      "additional_keys": []
+    }
+  },
   "claude_code": {
     "subscription_plan": "max20",
     "plans": {

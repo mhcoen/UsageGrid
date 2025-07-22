@@ -105,11 +105,26 @@ No API key needed - it reads your local Claude Code usage files directly.
 
 ### Advanced Configuration
 
-Edit `config.json` to customize:
-- Layout and card positions
-- Theme colors and accents
+UsageGrid stores all personal data in `~/.usagegrid/`:
+- `config.json` - User configuration and additional API keys
+- `cache.db` - Historical data cache
+- `logs/` - Application logs (if enabled)
+
+Edit `~/.usagegrid/config.json` to customize:
+- Additional API keys for each provider
 - Claude subscription plan (pro/max5/max20)
-- Provider-specific settings
+- Default theme preference
+
+Add multiple API keys per provider:
+```json
+{
+  "providers": {
+    "openai": {
+      "additional_keys": ["sk-key1", "sk-key2"]
+    }
+  }
+}
+```
 
 ## Usage
 

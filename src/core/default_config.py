@@ -1,0 +1,211 @@
+"""
+Default configuration for UsageGrid
+"""
+
+DEFAULT_CONFIG = {
+    "providers": {
+        "openai": {"additional_keys": []},
+        "openrouter": {"additional_keys": []},
+        "gemini": {"additional_keys": []}
+    },
+    "claude_code": {
+        "subscription_plan": "max20",
+        "plans": {
+            "pro": {
+                "name": "Pro",
+                "monthly_cost": 20,
+                "session_token_limit": 19000,
+                "session_cost_limit": 18.0,
+                "display_name": "Claude Pro"
+            },
+            "max5": {
+                "name": "Max 5×",
+                "monthly_cost": 100,
+                "session_token_limit": 88000,
+                "session_cost_limit": 35.0,
+                "display_name": "Claude Max 5×"
+            },
+            "max20": {
+                "name": "Max 20×",
+                "monthly_cost": 200,
+                "session_token_limit": 220000,
+                "session_cost_limit": 140.0,
+                "display_name": "Claude Max 20×"
+            }
+        }
+    },
+    "layout": {
+        "rows": 2,
+        "columns": 2,
+        "cards": [
+            {
+                "position": [0, 0],
+                "provider": "openai",
+                "card_type": "openai",
+                "display_name": "OpenAI",
+                "color": "#10a37f",
+                "name": "openai"
+            },
+            {
+                "position": [0, 1],
+                "provider": "anthropic",
+                "card_type": "claude_code",
+                "display_name": "Claude Code",
+                "color": "#e16e3d",
+                "name": "anthropic"
+            },
+            {
+                "position": [1, 0],
+                "stack": [
+                    {
+                        "provider": "openrouter",
+                        "card_type": "openrouter",
+                        "display_name": "OpenRouter",
+                        "color": "#ee4b2b",
+                        "size": "half",
+                        "name": "openrouter"
+                    },
+                    {
+                        "provider": "gemini",
+                        "card_type": "gemini",
+                        "display_name": "Gemini",
+                        "color": "#4285f4",
+                        "size": "half",
+                        "name": "gemini"
+                    }
+                ]
+            },
+            {
+                "position": [1, 1],
+                "provider": "github",
+                "card_type": "github",
+                "display_name": "GitHub",
+                "color": "#24292e",
+                "name": "github"
+            }
+        ]
+    },
+    "themes": {
+        "light": {
+            "name": "Light",
+            "background": "#f5f5f5",
+            "card_background": "white",
+            "text_primary": "#000000",
+            "text_secondary": "#666666",
+            "border": "#e0e0e0",
+            "accents": {
+                "openai": "#00a67e",
+                "anthropic": "#ff6b35",
+                "openrouter": "#e91e63",
+                "github": "#673ab7",
+                "gemini": "#2196f3",
+                "theme_selector": "#795548"
+            }
+        },
+        "dark": {
+            "name": "Dark",
+            "background": "#1e1e1e",
+            "card_background": "#2d2d2d",
+            "text_primary": "#ffffff",
+            "text_secondary": "#b0b0b0",
+            "border": "#404040",
+            "accents": {
+                "openai": "#4db8a5",
+                "anthropic": "#ff8a65",
+                "openrouter": "#f06292",
+                "github": "#9575cd",
+                "gemini": "#64b5f6",
+                "theme_selector": "#a1887f"
+            }
+        },
+        "midnight": {
+            "name": "Midnight",
+            "background": "#0d1117",
+            "card_background": "#161b22",
+            "text_primary": "#c9d1d9",
+            "text_secondary": "#8b949e",
+            "border": "#30363d"
+        },
+        "solarized": {
+            "name": "Solarized",
+            "background": "#fdf6e3",
+            "card_background": "#eee8d5",
+            "text_primary": "#657b83",
+            "text_secondary": "#93a1a1",
+            "border": "#93a1a1"
+        },
+        "solarized_dark": {
+            "name": "Solarized Dark",
+            "background": "#002b36",
+            "card_background": "#073642",
+            "text_primary": "#839496",
+            "text_secondary": "#586e75",
+            "border": "#586e75"
+        },
+        "nord": {
+            "name": "Nord",
+            "background": "#2e3440",
+            "card_background": "#3b4252",
+            "text_primary": "#eceff4",
+            "text_secondary": "#d8dee9",
+            "border": "#4c566a"
+        },
+        "dracula": {
+            "name": "Dracula",
+            "background": "#282a36",
+            "card_background": "#44475a",
+            "text_primary": "#f8f8f2",
+            "text_secondary": "#6272a4",
+            "border": "#6272a4"
+        },
+        "material": {
+            "name": "Material",
+            "background": "#fafafa",
+            "card_background": "#ffffff",
+            "text_primary": "#212121",
+            "text_secondary": "#757575",
+            "border": "#e0e0e0"
+        },
+        "material_dark": {
+            "name": "Material Dark",
+            "background": "#212121",
+            "card_background": "#424242",
+            "text_primary": "#ffffff",
+            "text_secondary": "#bdbdbd",
+            "border": "#616161"
+        },
+        "monokai": {
+            "name": "Monokai",
+            "background": "#272822",
+            "card_background": "#3e3d32",
+            "text_primary": "#f8f8f2",
+            "text_secondary": "#75715e",
+            "border": "#75715e"
+        },
+        "github": {
+            "name": "GitHub",
+            "background": "#ffffff",
+            "card_background": "#f6f8fa",
+            "text_primary": "#24292e",
+            "text_secondary": "#586069",
+            "border": "#e1e4e8"
+        },
+        "github_dark": {
+            "name": "GitHub Dark",
+            "background": "#0d1117",
+            "card_background": "#161b22",
+            "text_primary": "#c9d1d9",
+            "text_secondary": "#8b949e",
+            "border": "#30363d"
+        },
+        "high_contrast": {
+            "name": "High Contrast",
+            "background": "#000000",
+            "card_background": "#ffffff",
+            "text_primary": "#000000",
+            "text_secondary": "#000000",
+            "border": "#000000"
+        }
+    },
+    "default_theme": "dark"
+}

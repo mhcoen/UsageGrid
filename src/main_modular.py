@@ -25,6 +25,7 @@ from src.utils.session_helper import find_session_start
 from src.core.cache_db import CacheDB
 from src.ui.layout_manager import LayoutManager
 from src.ui.theme_manager import ThemeManager
+from src.core.paths import UsageGridPaths
 # Card registry removed - cards are created directly in layout_manager
 
 # Setup logging
@@ -155,7 +156,11 @@ class ModularMainWindow(QMainWindow):
         
     def _load_config(self) -> dict:
         """Load configuration from config.json"""
-        self.config_path = Path(__file__).parent.parent / "config.json"
+        # Migrate old data if needed
+        UsageGridPaths.migrate_from_old_paths()
+        UsageGridPaths.ensure_default_config()
+        
+        self.config_path = UsageGridPaths.get_config_path()
         try:
             with open(self.config_path, 'r') as f:
                 return json.load(f)
@@ -172,19 +177,42 @@ class ModularMainWindow(QMainWindow):
             logger.error(f"Error saving config: {e}")
             
     def _load_api_keys(self) -> Dict[str, str]:
-        """Load API keys from environment"""
+        """Load API keys from environment and config"""
+        # First get keys from environment (backward compatibility)
         keys = {
             "openai": os.getenv("OPENAI_API_KEY", ""),
             "anthropic": "",  # Claude Code doesn't use API key
             "openrouter": os.getenv("OPENROUTER_API_KEY", ""),
             "gemini": os.getenv("GOOGLE_CLOUD_PROJECT", "")
         }
-        # Log which keys are present (without revealing the actual keys)
-        for provider, key in keys.items():
-            if key:
-                logger.info(f"API key found for {provider}")
+        
+        # Store all keys for multi-key support
+        self.all_api_keys = {
+            "openai": [],
+            "openrouter": [],
+            "gemini": []
+        }
+        
+        # Add primary keys from environment
+        for provider in ["openai", "openrouter", "gemini"]:
+            if keys[provider]:
+                self.all_api_keys[provider].append(keys[provider])
+        
+        # Add additional keys from config
+        if "providers" in self.config:
+            for provider in ["openai", "openrouter", "gemini"]:
+                if provider in self.config["providers"]:
+                    additional = self.config["providers"][provider].get("additional_keys", [])
+                    if additional:
+                        self.all_api_keys[provider].extend(additional)
+        
+        # Log which keys are present
+        for provider, key_list in self.all_api_keys.items():
+            if key_list:
+                logger.info(f"API keys found for {provider}: {len(key_list)}")
             else:
                 logger.info(f"No API key for {provider}")
+                
         return keys
         
     def setup_ui(self):
@@ -390,7 +418,7 @@ class ModularMainWindow(QMainWindow):
         
         # OpenAI
         if self.api_keys.get("openai"):
-            cost, tokens, weekly_data = self.fetch_openai_data()
+            cost, tokens, weekly_data = self._fetch_openai_data_multikey()
             if cost >= 0:
                 data = {
                     'cost': cost,
@@ -435,9 +463,20 @@ class ModularMainWindow(QMainWindow):
         self.update_totals_display(daily_usage_total)
         
     def fetch_openai_data(self) -> tuple[float, int, dict]:
-        """Fetch OpenAI usage data"""
+        """Fetch OpenAI usage data from all configured keys"""
         logger.debug("Fetching OpenAI data")
         
+        # Get all OpenAI keys
+        openai_keys = self.all_api_keys.get("openai", [])
+        if not openai_keys:
+            # No keys configured
+            return 0.0, 0, {}
+            
+        # If we have multiple keys, aggregate the results
+        if len(openai_keys) > 1:
+            return self._fetch_openai_data_multikey()
+        
+        # Single key - use existing logic
         # OpenAI pricing per 1M tokens
         pricing = {
             "gpt-4o-2024-08-06": {"input": 2.50, "output": 10.00},
@@ -563,6 +602,175 @@ class ModularMainWindow(QMainWindow):
             logger.error(f"Error fetching OpenAI data: {e}")
             return -1, -1, {}
             
+    def _fetch_openai_data_multikey(self) -> tuple[float, int, dict]:
+        """Fetch OpenAI data from multiple keys and aggregate results"""
+        logger.info(f"Fetching OpenAI data from {len(self.all_api_keys['openai'])} keys")
+        
+        total_cost_all = 0.0
+        total_tokens_all = 0
+        weekly_data_all = {}
+        successful_keys = 0
+        
+        # Process each key separately
+        for key_index, api_key in enumerate(self.all_api_keys['openai']):
+            try:
+                # Call single-key method with key index for unique caching
+                cost, tokens, weekly = self._fetch_openai_single_key_indexed(api_key, key_index)
+                
+                if cost >= 0:  # Valid result (not error code)
+                    total_cost_all += cost
+                    total_tokens_all += tokens
+                    successful_keys += 1
+                    
+                    # Merge weekly data
+                    for date, data in weekly.items():
+                        if date not in weekly_data_all:
+                            weekly_data_all[date] = {'cost': 0.0, 'tokens': 0}
+                        weekly_data_all[date]['cost'] += data['cost']
+                        weekly_data_all[date]['tokens'] += data['tokens']
+                        
+                logger.debug(f"Key {key_index + 1}: cost=${cost:.4f}, tokens={tokens}")
+                
+            except Exception as e:
+                logger.error(f"Error with OpenAI key {key_index + 1}: {e}")
+                continue
+        
+        # Update key indicator
+        openai_card = self.layout_manager.cards.get('openai')
+        if openai_card:
+            openai_card.update_key_status(successful_keys, len(self.all_api_keys['openai']))
+        
+        # Return aggregated results
+        if successful_keys == 0:
+            return -429, -429, {}  # All keys failed
+            
+        return total_cost_all, total_tokens_all, weekly_data_all
+        
+    def _fetch_openai_single_key_indexed(self, api_key: str, key_index: int) -> tuple[float, int, dict]:
+        """Fetch data for a single OpenAI key with indexed caching"""
+        # OpenAI pricing per 1M tokens
+        pricing = {
+            "gpt-4o-2024-08-06": {"input": 2.50, "output": 10.00},
+            "gpt-4o-mini-2024-07-18": {"input": 0.15, "output": 0.60},
+            "gpt-3.5-turbo": {"input": 0.50, "output": 1.50}
+        }
+        
+        try:
+            headers = {
+                "Authorization": f"Bearer {api_key}",
+                "OpenAI-Beta": "usage=1"
+            }
+            
+            # Get today's date
+            today = datetime.now().strftime("%Y-%m-%d")
+            
+            # Use key index in cache key for multi-key support
+            cache_key = f"{today}_key{key_index}"
+            
+            # Check cache first
+            cached = self.cache_db.get_openai_daily_usage(cache_key)
+            if cached:
+                total_cost = cached['cost']
+                total_tokens = cached['tokens']
+            else:
+                # Fetch from API
+                response = requests.get(
+                    f"https://api.openai.com/v1/usage?date={today}",
+                    headers=headers,
+                    timeout=5
+                )
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    
+                    # Calculate costs
+                    total_cost = 0.0
+                    total_tokens = 0
+                    
+                    if "data" in data:
+                        for item in data["data"]:
+                            context_tokens = item.get("n_context_tokens_total", 0)
+                            generated_tokens = item.get("n_generated_tokens_total", 0)
+                            model = item.get("snapshot_id", "")
+                            
+                            model_pricing = pricing.get(model, pricing["gpt-4o-mini-2024-07-18"])
+                            
+                            input_cost = (context_tokens / 1_000_000) * model_pricing["input"]
+                            output_cost = (generated_tokens / 1_000_000) * model_pricing["output"]
+                            
+                            total_cost += input_cost + output_cost
+                            total_tokens += context_tokens + generated_tokens
+                    
+                    # Cache today's data with key index
+                    self.cache_db.set_openai_daily_usage(cache_key, total_tokens, total_cost, data)
+                elif response.status_code == 429:
+                    return -429, -429, {}
+                else:
+                    return -1, -1, {}
+                    
+            # Get monthly data (30 days for sparkline)
+            weekly_data = {}
+            
+            # Only fetch a limited number of historical days per key per update
+            uncached_fetches = 0
+            max_uncached_fetches = 2  # Limit per key to avoid too many API calls
+            
+            for i in range(30):
+                date = (datetime.now() - timedelta(days=i)).strftime("%Y-%m-%d")
+                date_cache_key = f"{date}_key{key_index}"
+                cached_day = self.cache_db.get_openai_daily_usage(date_cache_key)
+                
+                if cached_day:
+                    weekly_data[date] = {
+                        'cost': cached_day['cost'],
+                        'tokens': cached_day['tokens']
+                    }
+                elif i > 0 and uncached_fetches < max_uncached_fetches:
+                    # Fetch missing historical data
+                    logger.debug(f"Fetching OpenAI historical data for {date} (key {key_index + 1})")
+                    uncached_fetches += 1
+                    try:
+                        response = requests.get(
+                            f'https://api.openai.com/v1/usage?date={date}',
+                            headers=headers,
+                            timeout=5
+                        )
+                        
+                        if response.status_code == 200:
+                            data = response.json()
+                            day_cost = 0.0
+                            day_tokens = 0
+                            
+                            if "data" in data:
+                                for item in data["data"]:
+                                    context_tokens = item.get("n_context_tokens_total", 0)
+                                    generated_tokens = item.get("n_generated_tokens_total", 0)
+                                    model = item.get("snapshot_id", "")
+                                    
+                                    model_pricing = pricing.get(model, pricing["gpt-4o-mini-2024-07-18"])
+                                    
+                                    input_cost = (context_tokens / 1_000_000) * model_pricing["input"]
+                                    output_cost = (generated_tokens / 1_000_000) * model_pricing["output"]
+                                    
+                                    day_cost += input_cost + output_cost
+                                    day_tokens += context_tokens + generated_tokens
+                            
+                            # Cache the historical data with key index
+                            if day_cost > 0 or day_tokens > 0:
+                                self.cache_db.set_openai_daily_usage(date_cache_key, day_tokens, day_cost, data)
+                                weekly_data[date] = {
+                                    'cost': day_cost,
+                                    'tokens': day_tokens
+                                }
+                    except Exception as e:
+                        logger.debug(f"Could not fetch OpenAI data for {date}: {e}")
+                    
+            return total_cost, total_tokens, weekly_data
+            
+        except Exception as e:
+            logger.error(f"Error fetching OpenAI data with key {key_index + 1}: {e}")
+            return -1, -1, {}
+    
     def fetch_openrouter_data(self) -> dict:
         """Fetch OpenRouter usage data"""
         logger.debug("Fetching OpenRouter data")
@@ -723,7 +931,7 @@ class ModularMainWindow(QMainWindow):
             # Use the main window's fetch methods
             if provider == 'openai' and self.api_keys.get('openai'):
                 logger.debug(f"Using main window fetch for OpenAI")
-                cost, tokens, weekly = self.fetch_openai_data()
+                cost, tokens, weekly = self._fetch_openai_data_multikey()
                 if cost == -429:
                     data = {
                         'cost': 0.0,
