@@ -188,8 +188,9 @@ class ClaudeCodeReader:
         # If we have a since_date, only check files modified after that time
         if since_date:
             recent_files = []
-            # Go back a bit further to ensure we don't miss any entries
-            cutoff_time = (since_date - timedelta(hours=1)).timestamp()
+            # Go back 24 hours to ensure we don't miss any entries in files that were
+            # created before the session but are still being written to
+            cutoff_time = (since_date - timedelta(hours=24)).timestamp()
             
             for jsonl_path in all_jsonl_files:
                 try:
@@ -212,8 +213,10 @@ class ClaudeCodeReader:
             if any(active_file in f for f in jsonl_files):
                 logger.debug(f"Active session file {active_file} is in the list")
         
-        for file_path in jsonl_files:
+        for file_idx, file_path in enumerate(jsonl_files):
             try:
+                if file_idx == 0:
+                    logger.debug(f"Processing file: {os.path.basename(file_path)}")
                 with open(file_path, 'r') as f:
                     for line in f:
                         if not line.strip():

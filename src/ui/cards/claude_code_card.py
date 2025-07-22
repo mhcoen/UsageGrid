@@ -3,6 +3,7 @@ Enhanced Claude Code card that shows subscription and usage costs
 """
 import json
 import os
+import logging
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
 from typing import Dict, Any
@@ -11,6 +12,8 @@ from PyQt6.QtWidgets import QLabel, QProgressBar, QFrame, QWidget
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QFont, QPainter, QColor, QPen, QBrush
 from .base_card import BaseProviderCard
+
+logger = logging.getLogger(__name__)
 
 
 class ModelUsageGraph(QWidget):
@@ -207,6 +210,9 @@ class ClaudeCodeCard(BaseProviderCard):
         session_start = data.get('session_start')
         initial_rate_data = data.get('initial_rate_data', [])
         model_breakdown = data.get('model_breakdown', {})
+        
+        # Debug logging
+        logger.debug(f"ClaudeCodeCard.update_display called with tokens={tokens}, session_cost=${session_cost:.4f}")
         # Get token limit from config
         plan = self.config.get("claude_code", {}).get("subscription_plan", "max20")
         plans = self.config.get("claude_code", {}).get("plans", {})

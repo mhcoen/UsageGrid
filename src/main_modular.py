@@ -34,7 +34,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Reduce verbosity of Claude reader logs
-logging.getLogger('src.providers.claude_code_reader').setLevel(logging.WARNING)
+logging.getLogger('src.providers.claude_code_reader').setLevel(logging.DEBUG)
 
 
 class ClaudeDataWorker(QObject):
