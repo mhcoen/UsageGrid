@@ -19,6 +19,8 @@ class OpenRouterCard(BaseProviderCard):
             color="#e91e63",  # Pink/Magenta
             size=size
         )
+        self.billing_url = "https://openrouter.ai/credits"
+        self.enable_billing_link()
         
     def setup_content(self):
         """Add OpenRouter-specific content"""

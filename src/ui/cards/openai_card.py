@@ -89,6 +89,8 @@ class OpenAICard(BaseProviderCard):
             display_name="OpenAI",
             color="#00a67e"  # Teal green
         )
+        self.billing_url = "https://platform.openai.com/usage"
+        self.enable_billing_link()
         
     def setup_content(self):
         """Add OpenAI-specific content"""

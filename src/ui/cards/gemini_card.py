@@ -23,6 +23,8 @@ class GeminiCard(BaseProviderCard):
             color="#2196f3",  # Bright blue
             size=(220, 104)  # Half-height
         )
+        self.billing_url = "https://console.cloud.google.com/billing"
+        self.enable_billing_link()
         self.api_key = os.getenv("GOOGLE_CLOUD_PROJECT", "")
         
     def setup_content(self):

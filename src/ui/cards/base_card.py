@@ -27,14 +27,8 @@ class BaseProviderCard(QFrame):
             'secondary': 13,
             'small': 11
         }
-        # Billing page URLs
-        self.billing_urls = {
-            'openai': 'https://platform.openai.com/usage',
-            'anthropic': 'https://console.anthropic.com/settings/billing',
-            'openrouter': 'https://openrouter.ai/credits',
-            'github': 'https://github.com/settings/billing',
-            'gemini': 'https://console.cloud.google.com/billing'
-        }
+        # Billing URL - to be set by subclasses
+        self.billing_url = None
         self.setup_ui()
         
     def setup_ui(self):
@@ -53,16 +47,6 @@ class BaseProviderCard(QFrame):
         font.setPointSize(self.base_font_sizes['title'])
         font.setBold(True)
         self.title_label.setFont(font)
-        
-        # Make title clickable if we have a billing URL
-        if self.provider_name in self.billing_urls:
-            self.title_label.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
-            self.title_label.setToolTip(f"Click to open {self.display_name} billing page")
-            # Enable mouse tracking for hover effect
-            self.title_label.setMouseTracking(True)
-            # Install event filter to handle clicks
-            self.title_label.installEventFilter(self)
-            
         self.layout.addWidget(self.title_label)
         
         # Let subclasses add their content
@@ -85,6 +69,14 @@ class BaseProviderCard(QFrame):
     def setup_content(self):
         """Subclasses must implement this to add their specific content"""
         pass
+        
+    def enable_billing_link(self):
+        """Enable clickable title if billing URL is set"""
+        if self.billing_url and self.title_label:
+            self.title_label.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
+            self.title_label.setToolTip(f"Click to open {self.display_name} billing page")
+            self.title_label.setMouseTracking(True)
+            self.title_label.installEventFilter(self)
         
     @abstractmethod
     def update_display(self, data: Dict[str, Any]):
@@ -112,12 +104,11 @@ class BaseProviderCard(QFrame):
             
     def eventFilter(self, source, event):
         """Handle events for child widgets"""
-        if source == self.title_label and self.provider_name in self.billing_urls:
+        if source == self.title_label and self.billing_url:
             if event.type() == event.Type.MouseButtonPress:
                 if event.button() == Qt.MouseButton.LeftButton:
                     # Open billing URL
-                    url = self.billing_urls[self.provider_name]
-                    QDesktopServices.openUrl(QUrl(url))
+                    QDesktopServices.openUrl(QUrl(self.billing_url))
                     return True
             elif event.type() == event.Type.Enter:
                 # Add underline on hover

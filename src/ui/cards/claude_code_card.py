@@ -88,6 +88,8 @@ class ClaudeCodeCard(BaseProviderCard):
             display_name=f"Claude Code: {plan_display}",
             color="#ff6b35"  # Vibrant orange
         )
+        self.billing_url = "https://console.anthropic.com/settings/billing"
+        self.enable_billing_link()
         
         # Theme colors
         self.progress_bar_bg = "#e0e0e0"

@@ -159,6 +159,8 @@ class GitHubCard(BaseProviderCard):
             size=(220, 210),  # Back to standard width
             show_status=False  # Don't show the status text since we display commits in title
         )
+        self.billing_url = "https://github.com/settings/billing"
+        self.enable_billing_link()
         # Use secure credential manager if available, fall back to env vars
         if CredentialManager:
             self.token = CredentialManager.get_credential("github", "token", "GITHUB_TOKEN")
