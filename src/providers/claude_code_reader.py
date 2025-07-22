@@ -436,7 +436,7 @@ class ClaudeCodeReader:
                                 
                             entries_processed += 1
                             if entries_processed <= 3:
-                                # Processed entry
+                                pass  # Processed entry
                                 
                         except json.JSONDecodeError:
                             logger.warning(f"Invalid JSON in {file_path}: {line[:50]}...")
