@@ -87,9 +87,6 @@ class BaseProviderCard(QFrame):
         """Update the card display with new data"""
         pass
         
-    def fetch_data(self) -> Optional[Dict[str, Any]]:
-        """Fetch data for this card. Override in subclasses that fetch their own data."""
-        return None
         
     def update_status(self, status: str, status_type: str = "normal"):
         """Update the status label"""
@@ -167,6 +164,6 @@ class BaseProviderCard(QFrame):
         """Subclasses can override this to scale their specific content"""
         pass
         
-    def fetch_data(self) -> Dict[str, Any]:
+    def fetch_data(self) -> Optional[Dict[str, Any]]:
         """Fetch data for this provider. Override in subclasses that fetch their own data."""
-        return {}
+        return None

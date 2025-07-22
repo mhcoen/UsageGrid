@@ -103,3 +103,6 @@ class LayoutManager:
         card = self.cards.get(provider)
         if card:
             card.update_display(data)
+        else:
+            import logging
+            logging.getLogger(__name__).warning(f"No card found for provider: {provider}")

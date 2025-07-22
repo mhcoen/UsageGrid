@@ -28,7 +28,7 @@ from src.ui.theme_manager import ThemeManager
 
 # Setup logging
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.DEBUG,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
@@ -152,6 +152,7 @@ class ModularMainWindow(QMainWindow):
         self.apply_theme()
         
         # Initial fetch
+        logger.info("Starting initial data fetch")
         QTimer.singleShot(100, self.fetch_all_data)
         
     def _load_config(self) -> dict:
@@ -174,12 +175,19 @@ class ModularMainWindow(QMainWindow):
             
     def _load_api_keys(self) -> Dict[str, str]:
         """Load API keys from environment"""
-        return {
+        keys = {
             "openai": os.getenv("OPENAI_API_KEY", ""),
             "anthropic": "",  # Claude Code doesn't use API key
             "openrouter": os.getenv("OPENROUTER_API_KEY", ""),
             "gemini": os.getenv("GOOGLE_CLOUD_PROJECT", "")
         }
+        # Log which keys are present (without revealing the actual keys)
+        for provider, key in keys.items():
+            if key:
+                logger.info(f"API key found for {provider}")
+            else:
+                logger.info(f"No API key for {provider}")
+        return keys
         
     def setup_ui(self):
         """Setup the UI"""
@@ -384,9 +392,13 @@ class ModularMainWindow(QMainWindow):
             
     def fetch_all_data(self):
         """Initial fetch of data from all providers"""
+        logger.info(f"Fetching data for all cards: {list(self.layout_manager.get_all_cards().keys())}")
         for provider, card in self.layout_manager.get_all_cards().items():
             if card.auto_update:
+                logger.info(f"Updating {provider} card")
                 self.update_single_card(provider, card)
+            else:
+                logger.info(f"Skipping {provider} - auto_update is False")
         
         # Update totals after all cards
         daily_usage_total = 0.0
@@ -453,6 +465,7 @@ class ModularMainWindow(QMainWindow):
         
     def fetch_openai_data(self) -> tuple[float, int, dict]:
         """Fetch OpenAI usage data"""
+        logger.debug("Fetching OpenAI data")
         try:
             headers = {
                 "Authorization": f"Bearer {self.api_keys['openai']}",
@@ -521,6 +534,7 @@ class ModularMainWindow(QMainWindow):
                         'tokens': cached_day['tokens']
                     }
                     
+            logger.debug(f"OpenAI API returned: cost=${total_cost:.4f}, tokens={total_tokens}")
             return total_cost, total_tokens, weekly_data
             
         except Exception as e:
@@ -529,6 +543,7 @@ class ModularMainWindow(QMainWindow):
             
     def fetch_openrouter_data(self) -> dict:
         """Fetch OpenRouter usage data"""
+        logger.debug("Fetching OpenRouter data")
         try:
             headers = {
                 "Authorization": f"Bearer {self.api_keys['openrouter']}",
@@ -563,6 +578,7 @@ class ModularMainWindow(QMainWindow):
             
     def update_claude_only(self):
         """Update only Claude Code data"""
+        logger.debug("Updating Claude Code data")
         try:
             claude_data = self.fetch_claude_code_cached()
             
@@ -669,24 +685,47 @@ class ModularMainWindow(QMainWindow):
         
     def update_single_card(self, provider: str, card):
         """Update a single card"""
+        logger.debug(f"Updating card: {provider}")
         try:
             # If the card has its own fetch_data method, use it
-            if hasattr(card, 'fetch_data') and callable(card.fetch_data):
+            has_custom_fetch = hasattr(card, 'fetch_data') and callable(card.fetch_data)
+            if has_custom_fetch:
+                logger.debug(f"{provider} has fetch_data method")
                 data = card.fetch_data()
-                if data:
+                if data is not None:
+                    logger.debug(f"{provider} fetch_data returned data")
                     self.layout_manager.update_card_data(provider, data)
-            # Otherwise use the main window's fetch methods
-            elif provider == 'openai' and self.api_keys.get('openai'):
+                    return  # Exit early if card handled its own data
+                else:
+                    logger.debug(f"{provider} fetch_data returned None, using main window fetch")
+                    
+            # Use the main window's fetch methods
+            if provider == 'openai' and self.api_keys.get('openai'):
+                logger.debug(f"Using main window fetch for OpenAI")
                 cost, tokens, weekly = self.fetch_openai_data()
-                data = {
-                    'cost': cost,
-                    'tokens': tokens,
-                    'status': 'Active' if cost > 0 else 'No usage today'
-                }
+                if cost == -429:
+                    data = {
+                        'cost': 0.0,
+                        'tokens': 0,
+                        'status': 'Waiting for API reset',
+                        'weekly_data': {}
+                    }
+                elif cost >= 0:
+                    data = {
+                        'cost': cost,
+                        'tokens': tokens,
+                        'status': 'Active' if cost > 0 else 'No usage today',
+                        'weekly_data': weekly
+                    }
+                else:
+                    data = {
+                        'cost': 0.0,
+                        'tokens': 0,
+                        'status': 'Error',
+                        'weekly_data': {}
+                    }
+                logger.debug(f"Updating OpenAI card with data: {data}")
                 self.layout_manager.update_card_data('openai', data)
-                # Update weekly data if available
-                if hasattr(card, 'update_weekly_data'):
-                    card.update_weekly_data(weekly)
             elif provider == 'anthropic':
                 self.update_claude_only()
             elif provider == 'openrouter' and self.api_keys.get('openrouter'):
@@ -697,9 +736,11 @@ class ModularMainWindow(QMainWindow):
                     'status': 'Active'
                 }
                 self.layout_manager.update_card_data('openrouter', data)
+            else:
+                logger.debug(f"No update handler for {provider}")
             # Let other cards handle their own updates through fetch_data
         except Exception as e:
-            logger.error(f"Error updating {provider}: {e}")
+            logger.error(f"Error updating {provider}: {e}", exc_info=True)
     
     def cleanup_cache(self):
         """Periodic cleanup of caches"""
@@ -786,8 +827,9 @@ class ModularMainWindow(QMainWindow):
     def closeEvent(self, event):
         """Handle window close"""
         self.claude_worker.stop()
-        self.api_timer.stop()
-        self.claude_timer.stop()
+        # Stop all card timers
+        for timer in self.card_timers.values():
+            timer.stop()
         self.cleanup_timer.stop()
         event.accept()
 
