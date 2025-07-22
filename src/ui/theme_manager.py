@@ -67,10 +67,6 @@ class ThemeManager(QObject):
             border: 2px solid {border_color};
             border-radius: 10px;
         }}
-        QFrame:hover {{
-            background-color: {self.get_color('card_hover', card_bg)};
-            border: 2px solid {border_color};
-        }}
         QFrame > QLabel {{
             color: {text_color};
             border: none !important;
