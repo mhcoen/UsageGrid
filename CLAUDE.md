@@ -164,6 +164,8 @@ providers:
 - 2025-07-21: Removed seconds from time display for cleaner UI
 - 2025-07-21: Fixed bar chart ordering to show chronological progression
 - 2025-07-21: Created initial git repository and commit
+- 2025-07-22: Fixed Claude Code token counting to match monitor exactly (global deduplication)
+- 2025-07-22: Fixed session time display showing correct time (7:00 AM instead of 8:00 AM)
 
 ## Current Status
 - ✅ Project structure and dependencies
@@ -187,6 +189,9 @@ providers:
 - ✅ 4 decimal precision for all costs
 - ✅ Clean time display without seconds
 - ✅ Chronological bar chart ordering
+- ✅ Fixed Claude Code session timing (shows 7:00 AM correctly)
+- ✅ Token counting now matches Claude Code Usage Monitor exactly
+- ⏳ OpenAI model usage horizontal bar chart (planned)
 - ⏳ Additional graphs and detailed views
 - ⏳ Settings and configuration UI
 
@@ -265,6 +270,8 @@ This version:
 - All costs shown with 4 decimal precision (e.g., $0.0011)
 - OpenRouter shows all API information (usage limit, rate limits, free tier status)
 - Properly handles window closing without CPU spikes
+- Claude Code token counting matches monitor exactly (global deduplication before session filtering)
+- Session times display correctly (extended file lookback to 48h for proper boundary detection)
 
 ### Original Version:
 ```bash
@@ -298,7 +305,10 @@ Note: The original version may lock up due to heavy JSONL processing.
 22. ✅ Sort bar chart chronologically
 23. ✅ Create initial git repository
 24. ✅ Display all OpenRouter API information
-25. ⏳ Add additional graph/chart components
+25. ✅ Fix Claude Code token counting to match monitor
+26. ✅ Fix session time calculation (48h lookback for boundaries)
+27. ⏳ Add OpenAI model usage horizontal bar chart
+28. ⏳ Add additional graph/chart components
 25. ⏳ Add drill-down detail views
 26. ⏳ Create settings/configuration UI
 27. ⏳ Create modular provider widget system
