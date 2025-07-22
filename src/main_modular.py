@@ -494,9 +494,9 @@ class ModularMainWindow(QMainWindow):
                 else:
                     return -1, -1, {}
                     
-            # Get weekly data
+            # Get monthly data (30 days for sparkline)
             weekly_data = {}
-            for i in range(7):
+            for i in range(30):
                 date = (datetime.now() - timedelta(days=i)).strftime("%Y-%m-%d")
                 cached_day = self.cache_db.get_openai_daily_usage(date)
                 if cached_day:

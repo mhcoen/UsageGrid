@@ -2,88 +2,160 @@
 Enhanced OpenAI card with bar chart visualization
 """
 from PyQt6.QtWidgets import QLabel, QWidget
-from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QFont, QPainter, QColor, QPen, QBrush
-from datetime import datetime
-from typing import Dict, Any, Optional
+from PyQt6.QtCore import Qt, QTimer, QPointF, QPropertyAnimation, QEasingCurve, pyqtProperty
+from PyQt6.QtGui import QFont, QPainter, QColor, QPen, QBrush, QLinearGradient, QPainterPath
+from datetime import datetime, timedelta
+from typing import Dict, Any, Optional, List
 from .base_card import BaseProviderCard
+import math
 
 
-class BarChartWidget(QWidget):
-    """Simple bar chart widget for displaying weekly data"""
+class SparklineWidget(QWidget):
+    """Sparkline widget with gradient fill for 30-day cost trend"""
     
     def __init__(self):
         super().__init__()
-        self.data = {}  # {date_str: value}
-        self.setMinimumHeight(50)
-        self.setMaximumHeight(60)
-        self.text_color = QColor(100, 100, 100)  # Default text color
+        self.data = []  # List of (date, value) tuples for last 30 days
+        self.setMinimumHeight(60)
+        self.setMaximumHeight(80)
+        self.text_color = QColor(180, 180, 180)  # Default text color
+        self.provider_color = QColor("#00a67e")  # OpenAI green
         
-    def set_data(self, data: Dict[str, float]):
-        """Set the data to display"""
-        self.data = data
+        # Animation for current day pulse
+        self._pulse_radius = 3
+        self.pulse_animation = QPropertyAnimation(self, b"pulseRadius")
+        self.pulse_animation.setDuration(2000)
+        self.pulse_animation.setStartValue(3)
+        self.pulse_animation.setEndValue(6)
+        self.pulse_animation.setEasingCurve(QEasingCurve.Type.InOutSine)
+        self.pulse_animation.setLoopCount(-1)  # Infinite loop
+        self.pulse_animation.start()
+        
+    @pyqtProperty(float)
+    def pulseRadius(self):
+        return self._pulse_radius
+    
+    @pulseRadius.setter
+    def pulseRadius(self, value):
+        self._pulse_radius = value
+        self.update()
+        
+    def set_data(self, daily_data: List[tuple]):
+        """Set the data to display as list of (date, value) tuples"""
+        self.data = daily_data[-30:]  # Keep last 30 days
         self.update()
         
     def paintEvent(self, event):
-        """Paint the bar chart"""
+        """Paint the sparkline with gradient fill"""
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         
-        if not self.data:
+        if not self.data or len(self.data) < 2:
             painter.setPen(QPen(QColor(150, 150, 150)))
-            painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, "No data")
-            return
-            
-        # Sort data by date (earliest to latest)
-        sorted_dates = sorted(self.data.keys())[:7]  # Last 7 days
-        
-        if not sorted_dates:
+            painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, "Insufficient data")
             return
             
         # Calculate dimensions
-        margin = 5
-        bar_width = (self.width() - 2 * margin) / len(sorted_dates) - 5
-        max_value = max(self.data.values()) if max(self.data.values()) > 0 else 1
-        chart_height = self.height() - 2 * margin - 15  # Leave room for labels
+        margin = 10
+        width = self.width() - 2 * margin
+        height = self.height() - 2 * margin
         
-        # Draw bars
-        for i, date_str in enumerate(sorted_dates):
-            value = self.data.get(date_str, 0)
+        # Find min/max for scaling
+        values = [v for _, v in self.data]
+        min_val = min(values)
+        max_val = max(values)
+        value_range = max_val - min_val if max_val > min_val else 1
+        
+        # Create points for the line
+        points = []
+        for i, (date, value) in enumerate(self.data):
+            x = margin + (i / (len(self.data) - 1)) * width
+            y = margin + height - ((value - min_val) / value_range) * height
+            points.append(QPointF(x, y))
+        
+        # Create gradient fill
+        gradient = QLinearGradient(0, margin, 0, margin + height)
+        gradient.setColorAt(0, QColor(self.provider_color.red(), self.provider_color.green(), 
+                                     self.provider_color.blue(), 80))
+        gradient.setColorAt(1, QColor(self.provider_color.red(), self.provider_color.green(), 
+                                     self.provider_color.blue(), 0))
+        
+        # Draw filled area
+        fill_path = QPainterPath()
+        fill_path.moveTo(points[0].x(), margin + height)
+        for point in points:
+            fill_path.lineTo(point)
+        fill_path.lineTo(points[-1].x(), margin + height)
+        fill_path.closeSubpath()
+        
+        painter.fillPath(fill_path, QBrush(gradient))
+        
+        # Draw the smooth line
+        pen = QPen(self.provider_color, 2)
+        painter.setPen(pen)
+        
+        path = QPainterPath()
+        path.moveTo(points[0])
+        
+        # Create smooth curve through points using quadratic bezier
+        for i in range(1, len(points)):
+            p1 = points[i-1]
+            p2 = points[i]
             
-            # Calculate bar position and height
-            x = int(margin + i * (bar_width + 5))
-            bar_height = int((value / max_value) * chart_height) if max_value > 0 else 0
-            y = int(self.height() - margin - 15 - bar_height)
-            bar_width_int = int(bar_width)
+            # Control point for smooth curve
+            cx = (p1.x() + p2.x()) / 2
+            cy = (p1.y() + p2.y()) / 2
             
-            # Draw bar
-            if value > 0:
-                painter.fillRect(x, y, bar_width_int, bar_height, QBrush(QColor(16, 163, 127)))
+            path.quadTo(p1.x() + (cx - p1.x()) * 0.5, p1.y(),
+                       cx, cy)
+            path.quadTo(p2.x() - (p2.x() - cx) * 0.5, p2.y(),
+                       p2.x(), p2.y())
+        
+        painter.drawPath(path)
+        
+        # Draw dots for each data point
+        dot_pen = QPen(self.provider_color, 1)
+        painter.setPen(dot_pen)
+        painter.setBrush(QBrush(Qt.GlobalColor.white))
+        
+        for i, point in enumerate(points):
+            if i == len(points) - 1:  # Current day with pulse
+                # Pulsing effect
+                painter.setPen(QPen(self.provider_color, 2))
+                painter.setBrush(QBrush(self.provider_color))
+                painter.drawEllipse(point, self._pulse_radius, self._pulse_radius)
+                
+                # Inner white dot
+                painter.setBrush(QBrush(Qt.GlobalColor.white))
+                painter.drawEllipse(point, 2, 2)
+            else:
+                # Regular dots
+                painter.setPen(dot_pen)
+                painter.setBrush(QBrush(Qt.GlobalColor.white))
+                painter.drawEllipse(point, 2, 2)
+                
+        # Draw start and end labels
+        painter.setPen(QPen(self.text_color))
+        painter.setFont(QFont("Arial", 8))
+        
+        # Start date
+        if self.data:
+            start_date = self.data[0][0]
+            start_label = start_date.strftime("%m/%d")
+            painter.drawText(int(margin - 5), int(margin + height + 15), start_label)
             
-            # Draw date label
-            date_obj = datetime.fromisoformat(date_str)
-            label = date_obj.strftime("%m/%d")
-            painter.setPen(QPen(self.text_color))
-            painter.setFont(QFont("Arial", 8))
-            label_rect = painter.boundingRect(x, self.height() - 15, bar_width_int, 15, 
-                                            Qt.AlignmentFlag.AlignCenter, label)
-            painter.drawText(label_rect, Qt.AlignmentFlag.AlignCenter, label)
-            
-            # Draw value on top of bar if it's tall enough
-            if bar_height > 20 and value > 0:
-                # Use contrasting color for text on bars
-                painter.setPen(QPen(QColor(255, 255, 255)))
-                painter.setFont(QFont("Arial", 9, QFont.Weight.Bold))
-                value_text = f"${value:.2f}" if value < 100 else f"${int(value)}"
-                painter.drawText(x, y + 2, bar_width_int, 20, 
-                               Qt.AlignmentFlag.AlignCenter, value_text)
+            # End date
+            end_date = self.data[-1][0]
+            end_label = end_date.strftime("%m/%d")
+            text_width = painter.fontMetrics().horizontalAdvance(end_label)
+            painter.drawText(int(self.width() - margin - text_width + 5), int(margin + height + 15), end_label)
 
 
 class OpenAICard(BaseProviderCard):
-    """Enhanced OpenAI provider card with bar chart"""
+    """Enhanced OpenAI provider card with sparkline visualization"""
     
     def __init__(self):
-        self.weekly_data = {}
+        self.daily_data = []  # List of (date, cost) tuples
         super().__init__(
             provider_name="openai",
             display_name="OpenAI",
@@ -114,14 +186,19 @@ class OpenAICard(BaseProviderCard):
         # Add spacing before chart section
         self.layout.addSpacing(5)
         
-        # Weekly chart label
-        self.chart_label = QLabel("Past 7 days:")
-        self.chart_label.setStyleSheet(f"font-size: {self.base_font_sizes['small']}px;")
-        self.layout.addWidget(self.chart_label)
+        # Sparkline label
+        self.sparkline_label = QLabel("Last 30 days")
+        self.sparkline_label.setStyleSheet(f"font-size: {self.base_font_sizes['small']}px; color: #888888;")
+        self.layout.addWidget(self.sparkline_label)
         
-        # Bar chart
-        self.bar_chart = BarChartWidget()
-        self.layout.addWidget(self.bar_chart)
+        # Sparkline chart
+        self.sparkline = SparklineWidget()
+        self.layout.addWidget(self.sparkline)
+        
+        # Total cost label
+        self.total_label = QLabel("")
+        self.total_label.setStyleSheet(f"font-size: {self.base_font_sizes['secondary']}px; font-weight: bold;")
+        self.layout.addWidget(self.total_label)
         
     def update_display(self, data: Dict[str, Any]):
         """Update the card display"""
@@ -139,9 +216,9 @@ class OpenAICard(BaseProviderCard):
         else:
             self.token_label.setText("Tokens: -")
             
-        # Update weekly data if provided
+        # Update weekly data if provided (convert to daily for sparkline)
         if weekly_data:
-            self.update_weekly_data(weekly_data)
+            self.update_sparkline_data(weekly_data)
             
         # Update status
         status_type = "normal"
@@ -154,33 +231,43 @@ class OpenAICard(BaseProviderCard):
             
         self.update_status(status, status_type)
             
-    def update_weekly_data(self, weekly_data: Dict[str, Dict]):
-        """Update the weekly bar chart data"""
-        self.weekly_data = weekly_data
+    def update_sparkline_data(self, weekly_data: Dict[str, Dict]):
+        """Update the sparkline with daily data"""
+        # Convert weekly data to daily format for sparkline
+        daily_list = []
         
-        # Extract costs for the chart
-        chart_data = {}
-        for date_str, data in weekly_data.items():
-            chart_data[date_str] = data.get("cost", 0.0)
+        # Get today
+        today = datetime.now().date()
+        
+        # Generate last 30 days of data
+        for i in range(30):
+            date = today - timedelta(days=29-i)
+            date_str = date.isoformat()
             
-        self.bar_chart.set_data(chart_data)
+            # Use actual data if available, otherwise 0
+            if date_str in weekly_data:
+                cost = weekly_data[date_str].get("cost", 0.0)
+            else:
+                cost = 0.0
+                
+            daily_list.append((date, cost))
         
-        # Update chart label with total
-        total_cost = sum(d.get("cost", 0) for d in weekly_data.values())
-        total_tokens = sum(d.get("tokens", 0) for d in weekly_data.values())
+        self.daily_data = daily_list
+        self.sparkline.set_data(daily_list)
         
-        if total_cost > 0:
-            self.chart_label.setText(f"Past 7 days: ${total_cost:.2f} ({total_tokens:,} tokens)")
-        else:
-            self.chart_label.setText("Past 7 days:")
+        # Update total label (last 30 days)
+        total_cost = sum(cost for _, cost in daily_list)
+        self.total_label.setText(f"${total_cost:.2f} total")
             
     def update_theme_colors(self, is_dark: bool):
         """Update chart colors based on theme"""
         if is_dark:
-            self.bar_chart.text_color = QColor(180, 180, 180)
+            self.sparkline.text_color = QColor(180, 180, 180)
+            self.sparkline_label.setStyleSheet(f"font-size: {self.base_font_sizes['small']}px; color: #888888;")
         else:
-            self.bar_chart.text_color = QColor(100, 100, 100)
-        self.bar_chart.update()
+            self.sparkline.text_color = QColor(100, 100, 100)
+            self.sparkline_label.setStyleSheet(f"font-size: {self.base_font_sizes['small']}px; color: #666666;")
+        self.sparkline.update()
             
     def scale_content_fonts(self, scale: float):
         """Scale OpenAI-specific fonts"""
@@ -191,4 +278,5 @@ class OpenAICard(BaseProviderCard):
         
         # Scale other labels
         self.token_label.setStyleSheet(f"font-size: {int(self.base_font_sizes['secondary'] * scale)}px;")
-        self.chart_label.setStyleSheet(f"font-size: {int(self.base_font_sizes['small'] * scale)}px;")
+        self.sparkline_label.setStyleSheet(f"font-size: {int(self.base_font_sizes['small'] * scale)}px; color: #888888;")
+        self.total_label.setStyleSheet(f"font-size: {int(self.base_font_sizes['secondary'] * scale)}px; font-weight: bold;")
