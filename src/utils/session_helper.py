@@ -139,7 +139,7 @@ def find_session_start(now: datetime, claude_dir: Path = None) -> datetime:
             # Cache the session info
             _session_cache['session_start'] = session_start
             _session_cache['session_end'] = session_end
-            logger.info(f"Found active session: started at {session_start}, ends at {session_end}")
+            # Found active session
             break
     
     if current_session_start is None:

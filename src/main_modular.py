@@ -63,7 +63,7 @@ class ClaudeDataWorker(QObject):
     def _fetch_data_thread(self, session_start: datetime, now: datetime):
         """Thread function to fetch data"""
         try:
-            logger.debug("Starting Claude data fetch in background")
+            # Starting Claude data fetch in background
             
             # Get session data
             session_data = self.claude_reader.get_usage_data(since_date=session_start)
@@ -148,7 +148,7 @@ class ModularMainWindow(QMainWindow):
         self.apply_theme()
         
         # Initial fetch
-        logger.info("Starting initial data fetch")
+        # Initial data fetch
         QTimer.singleShot(100, self.fetch_all_data)
         
     def _load_config(self) -> dict:
@@ -495,7 +495,7 @@ class ModularMainWindow(QMainWindow):
                         'tokens': cached_day['tokens']
                     }
                     
-            logger.debug(f"OpenAI API returned: cost=${total_cost:.4f}, tokens={total_tokens}")
+            # OpenAI data fetched
             return total_cost, total_tokens, weekly_data
             
         except Exception as e:
@@ -609,9 +609,7 @@ class ModularMainWindow(QMainWindow):
             session_start = data.get('session_start')
             if session_start:
                 hours_ago = (datetime.now(timezone.utc).replace(tzinfo=None) - session_start).total_seconds() / 3600
-                logger.info(f"Claude Code - Session started {hours_ago:.1f}h ago, "
-                          f"Daily: ${data['daily']:.2f}, Session: ${data['session']:.2f}, "
-                          f"Tokens: {data['tokens']:,}")
+                # Claude Code session info logged
                           
             self.info_label.setText("Claude data updated")
             

@@ -294,7 +294,7 @@ class ClaudeCodeReader:
         # Create a new set for deduplication per call
         processed_ids: Set[str] = set()
             
-        logger.info(f"Reading Claude Code usage from {self.claude_dir}")
+        # Reading Claude Code usage
         if since_date:
             logger.debug(f"Looking for entries since {since_date}")
         
@@ -327,11 +327,11 @@ class ClaudeCodeReader:
                     continue
             
             jsonl_files = recent_files
-            logger.info(f"Checking {len(jsonl_files)} recent files (out of {len(all_jsonl_files)} total)")
+            # Checking recent files
         else:
             jsonl_files = all_jsonl_files
         
-        logger.info(f"Found {len(jsonl_files)} JSONL files")
+        # Processing JSONL files
         if jsonl_files:
             logger.debug(f"Files to process: {[os.path.basename(f) for f in jsonl_files[:3]]}...")
             # Check if our active session file is in the list
@@ -446,7 +446,7 @@ class ClaudeCodeReader:
             except Exception as e:
                 logger.error(f"Error reading file {file_path}: {e}")
                 
-        logger.debug(f"Processed {entries_processed} entries with usage data")
+        # Finished processing entries
         
         # Return both cache and non-cache tokens
         return {
