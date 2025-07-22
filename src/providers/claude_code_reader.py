@@ -90,7 +90,21 @@ class ClaudeCodeReader:
         
         # Get all entries for this session
         entries_with_time = []
-        jsonl_files = glob.glob(str(self.claude_dir / "**" / "*.jsonl"), recursive=True)
+        all_jsonl_files = glob.glob(str(self.claude_dir / "**" / "*.jsonl"), recursive=True)
+        
+        # Only check files modified recently (since session start at least)
+        recent_files = []
+        cutoff_time = session_start.timestamp()
+        
+        for jsonl_path in all_jsonl_files:
+            try:
+                mtime = os.path.getmtime(jsonl_path)
+                if mtime > cutoff_time:
+                    recent_files.append(jsonl_path)
+            except:
+                continue
+        
+        jsonl_files = recent_files
         
         for file_path in jsonl_files:
             try:
@@ -166,7 +180,26 @@ class ClaudeCodeReader:
         
         # Find all JSONL files
         pattern = str(self.claude_dir / "**" / "*.jsonl")
-        jsonl_files = glob.glob(pattern, recursive=True)
+        all_jsonl_files = glob.glob(pattern, recursive=True)
+        
+        # If we have a since_date, only check files modified after that time
+        if since_date:
+            recent_files = []
+            # Go back a bit further to ensure we don't miss any entries
+            cutoff_time = (since_date - timedelta(hours=1)).timestamp()
+            
+            for jsonl_path in all_jsonl_files:
+                try:
+                    mtime = os.path.getmtime(jsonl_path)
+                    if mtime > cutoff_time:
+                        recent_files.append(jsonl_path)
+                except:
+                    continue
+            
+            jsonl_files = recent_files
+            logger.info(f"Checking {len(jsonl_files)} recent files (out of {len(all_jsonl_files)} total)")
+        else:
+            jsonl_files = all_jsonl_files
         
         logger.info(f"Found {len(jsonl_files)} JSONL files")
         

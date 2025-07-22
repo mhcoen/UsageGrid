@@ -3,8 +3,13 @@ Layout manager for configurable card layouts
 """
 from typing import Dict, List, Any, Optional
 from PyQt6.QtWidgets import QWidget, QGridLayout, QVBoxLayout
-from .card_registry import CardRegistry
 from .cards.base_card import BaseProviderCard
+from .cards.openai_card import OpenAICard
+from .cards.openrouter_card import OpenRouterCard
+from .cards.claude_code_card import ClaudeCodeCard
+from .cards.github_card import GitHubCard
+from .cards.gemini_card import GeminiCard
+from .cards.simple_card import SimpleCard
 
 
 class LayoutManager:
@@ -60,7 +65,30 @@ class LayoutManager:
         if 'provider' in card_config and 'name' not in card_config:
             card_config['name'] = card_config['provider']
             
-        return CardRegistry.create_card(card_config)
+        # Create card based on type
+        card_type = card_config.get('card_type', card_config.get('provider'))
+        
+        if card_type == 'openai':
+            return OpenAICard()
+        elif card_type == 'openrouter':
+            size = (220, 210) if card_config.get('size') != 'half' else (220, 104)
+            return OpenRouterCard(size=size)
+        elif card_type == 'claude_code':
+            return ClaudeCodeCard()
+        elif card_type == 'github':
+            return GitHubCard()
+        elif card_type == 'gemini':
+            return GeminiCard()
+        elif card_type == 'simple':
+            # For simple cards, pass configuration
+            return SimpleCard(
+                provider_name=card_config.get('provider', 'unknown'),
+                display_name=card_config.get('display_name', 'Unknown'),
+                color=card_config.get('color', '#666666'),
+                metric_name=card_config.get('metric_name', 'Requests')
+            )
+        else:
+            raise ValueError(f"Unknown card type: {card_type}")
         
     def get_card(self, provider: str) -> Optional[BaseProviderCard]:
         """Get a card by provider name"""

@@ -60,9 +60,24 @@ def find_session_start(now: datetime, claude_dir: Path = None) -> datetime:
     if claude_dir is None:
         claude_dir = Path.home() / ".claude" / "projects"
     
-    # Find all JSONL files
+    # Find all JSONL files and filter to only recent ones
     pattern = str(claude_dir / "**" / "*.jsonl")
-    jsonl_files = glob.glob(pattern, recursive=True)
+    all_jsonl_files = glob.glob(pattern, recursive=True)
+    
+    # Only check files modified in the last 24 hours to speed up search
+    recent_files = []
+    cutoff_time = (now - timedelta(hours=24)).timestamp()
+    
+    for jsonl_path in all_jsonl_files:
+        try:
+            mtime = os.path.getmtime(jsonl_path)
+            if mtime > cutoff_time:
+                recent_files.append(jsonl_path)
+        except:
+            continue
+    
+    jsonl_files = recent_files
+    logger.info(f"Checking {len(jsonl_files)} recent JSONL files (out of {len(all_jsonl_files)} total)")
     
     all_timestamps = []
     

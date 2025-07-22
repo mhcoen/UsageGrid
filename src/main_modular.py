@@ -19,12 +19,12 @@ from PyQt6.QtGui import QFont, QKeySequence, QShortcut, QAction
 # Add path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from src.providers.claude_code_reader_optimized import ClaudeCodeReaderOptimized as ClaudeCodeReader
+from src.providers.claude_code_reader import ClaudeCodeReader
 from src.utils.session_helper import find_session_start
 from src.core.cache_db import CacheDB
 from src.ui.layout_manager import LayoutManager
 from src.ui.theme_manager import ThemeManager
-from src.ui.card_registry import CardRegistry
+# Card registry removed - cards are created directly in layout_manager
 
 # Setup logging
 logging.basicConfig(
