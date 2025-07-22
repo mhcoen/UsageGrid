@@ -72,9 +72,9 @@ class ClaudeDataWorker(QObject):
             one_day_ago = now - timedelta(hours=24)
             daily_data = self.claude_reader.get_usage_data(since_date=one_day_ago)
             
-            # For now, show output tokens only (this seems to be what Claude displays)
-            # TODO: Verify exact calculation with ccusage
-            total_tokens = session_data.get('total_output_tokens', 0)
+            # Get total non-cache tokens from session data
+            # This was the working calculation before I started messing with it
+            total_tokens = session_data.get('total_tokens', 0)
             
             # Get rate history
             rate_history = self.claude_reader.get_token_rate_history(session_start, interval_minutes=0.5)

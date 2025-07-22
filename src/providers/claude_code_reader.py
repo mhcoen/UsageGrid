@@ -6,7 +6,7 @@ import os
 import json
 import glob
 from pathlib import Path
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Set, Callable
 import logging
 import asyncio
@@ -162,6 +162,113 @@ class ClaudeCodeReader:
                 rates.append(current_interval_tokens)
         
         return rates
+    
+    def get_5hour_window_tokens(self) -> int:
+        """Get tokens for the current 5-hour window (matches Claude's billing window)"""
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        window_start = now - timedelta(hours=5)
+        
+        total_input = 0
+        total_output = 0
+        
+        # Find all JSONL files
+        pattern = str(self.claude_dir / "**" / "*.jsonl")
+        jsonl_files = glob.glob(pattern, recursive=True)
+        
+        for file_path in jsonl_files:
+            try:
+                with open(file_path, 'r') as f:
+                    for line in f:
+                        if not line.strip():
+                            continue
+                            
+                        try:
+                            entry = json.loads(line)
+                            
+                            # Only process assistant messages
+                            if entry.get('type') != 'assistant':
+                                continue
+                                
+                            # Check timestamp
+                            timestamp_str = entry.get('timestamp')
+                            if not timestamp_str:
+                                continue
+                                
+                            timestamp = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
+                            if timestamp.tzinfo:
+                                timestamp = timestamp.replace(tzinfo=None)
+                                
+                            # Check if in 5-hour window
+                            if timestamp < window_start or timestamp > now:
+                                continue
+                                
+                            # Extract usage data
+                            message = entry.get('message', {})
+                            usage = message.get('usage', {})
+                            
+                            if usage:
+                                # Count only input and output tokens (not cache)
+                                total_input += usage.get('input_tokens', 0)
+                                total_output += usage.get('output_tokens', 0)
+                                
+                        except json.JSONDecodeError:
+                            continue
+                        except Exception:
+                            continue
+                            
+            except Exception as e:
+                logger.error(f"Error reading file {file_path}: {e}")
+                
+        return total_input + total_output
+    
+    def get_session_output_tokens(self, session_start: datetime) -> int:
+        """Get output tokens for the current session"""
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        total_output = 0
+        
+        # Find all JSONL files
+        pattern = str(self.claude_dir / "**" / "*.jsonl")
+        jsonl_files = glob.glob(pattern, recursive=True)
+        
+        for file_path in jsonl_files:
+            try:
+                with open(file_path, 'r') as f:
+                    for line in f:
+                        if not line.strip():
+                            continue
+                            
+                        try:
+                            entry = json.loads(line)
+                            
+                            # Only process assistant messages
+                            if entry.get('type') != 'assistant':
+                                continue
+                                
+                            # Check timestamp
+                            timestamp_str = entry.get('timestamp')
+                            if not timestamp_str:
+                                continue
+                                
+                            timestamp = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
+                            if timestamp.tzinfo:
+                                timestamp = timestamp.replace(tzinfo=None)
+                                
+                            # Check if in session
+                            if timestamp >= session_start and timestamp <= now:
+                                # Extract usage data
+                                message = entry.get('message', {})
+                                usage = message.get('usage', {})
+                                
+                                if usage:
+                                    total_output += usage.get('output_tokens', 0)
+                                    
+                        except:
+                            continue
+                            
+            except Exception as e:
+                logger.error(f"Error reading file {file_path}: {e}")
+                
+        return total_output
     
     def get_usage_data(self, since_date: Optional[datetime] = None) -> Dict:
         """Get Claude usage data from JSONL files"""
