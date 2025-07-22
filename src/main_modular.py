@@ -437,6 +437,14 @@ class ModularMainWindow(QMainWindow):
     def fetch_openai_data(self) -> tuple[float, int, dict]:
         """Fetch OpenAI usage data"""
         logger.debug("Fetching OpenAI data")
+        
+        # OpenAI pricing per 1M tokens
+        pricing = {
+            "gpt-4o-2024-08-06": {"input": 2.50, "output": 10.00},
+            "gpt-4o-mini-2024-07-18": {"input": 0.15, "output": 0.60},
+            "gpt-3.5-turbo": {"input": 0.50, "output": 1.50}
+        }
+        
         try:
             headers = {
                 "Authorization": f"Bearer {self.api_keys['openai']}",
@@ -466,13 +474,6 @@ class ModularMainWindow(QMainWindow):
                     total_cost = 0.0
                     total_tokens = 0
                     
-                    # OpenAI pricing
-                    pricing = {
-                        "gpt-4o-2024-08-06": {"input": 2.50, "output": 10.00},
-                        "gpt-4o-mini-2024-07-18": {"input": 0.15, "output": 0.60},
-                        "gpt-3.5-turbo": {"input": 0.50, "output": 1.50}
-                    }
-                    
                     if "data" in data:
                         for item in data["data"]:
                             context_tokens = item.get("n_context_tokens_total", 0)
@@ -496,14 +497,64 @@ class ModularMainWindow(QMainWindow):
                     
             # Get monthly data (30 days for sparkline)
             weekly_data = {}
+            headers = {
+                'Authorization': f'Bearer {self.api_keys["openai"]}',
+                'OpenAI-Beta': 'usage=1'
+            }
+            
+            # Limit how many uncached days we fetch per update cycle
+            uncached_fetches = 0
+            max_uncached_fetches = 5  # Fetch up to 5 missing days per update
+            
             for i in range(30):
                 date = (datetime.now() - timedelta(days=i)).strftime("%Y-%m-%d")
                 cached_day = self.cache_db.get_openai_daily_usage(date)
+                
                 if cached_day:
                     weekly_data[date] = {
                         'cost': cached_day['cost'],
                         'tokens': cached_day['tokens']
                     }
+                elif i > 0 and uncached_fetches < max_uncached_fetches:  # Skip today and limit fetches
+                    # Fetch missing historical data from OpenAI
+                    logger.info(f"Fetching OpenAI historical data for {date}")
+                    uncached_fetches += 1
+                    try:
+                        response = requests.get(
+                            f'https://api.openai.com/v1/usage?date={date}',
+                            headers=headers,
+                            timeout=5
+                        )
+                        
+                        if response.status_code == 200:
+                            data = response.json()
+                            day_cost = 0.0
+                            day_tokens = 0
+                            
+                            if "data" in data:
+                                for item in data["data"]:
+                                    context_tokens = item.get("n_context_tokens_total", 0)
+                                    generated_tokens = item.get("n_generated_tokens_total", 0)
+                                    model = item.get("snapshot_id", "")
+                                    
+                                    model_pricing = pricing.get(model, pricing["gpt-4o-mini-2024-07-18"])
+                                    
+                                    input_cost = (context_tokens / 1_000_000) * model_pricing["input"]
+                                    output_cost = (generated_tokens / 1_000_000) * model_pricing["output"]
+                                    
+                                    day_cost += input_cost + output_cost
+                                    day_tokens += context_tokens + generated_tokens
+                            
+                            # Cache the historical data
+                            if day_cost > 0 or day_tokens > 0:
+                                self.cache_db.set_openai_daily_usage(date, day_tokens, day_cost, data)
+                                weekly_data[date] = {
+                                    'cost': day_cost,
+                                    'tokens': day_tokens
+                                }
+                    except Exception as e:
+                        logger.debug(f"Could not fetch OpenAI data for {date}: {e}")
+                        # Continue with other dates
                     
             # OpenAI data fetched
             return total_cost, total_tokens, weekly_data
