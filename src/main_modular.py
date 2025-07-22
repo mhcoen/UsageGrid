@@ -316,8 +316,8 @@ class ModularMainWindow(QMainWindow):
         """Setup keyboard shortcuts"""
         # Quit shortcuts
         QShortcut(QKeySequence.StandardKey.Quit, self, self.close)  # Cmd+Q on Mac, Ctrl+Q on others
-        QShortcut(QKeySequence("Ctrl+C"), self, self.close)  # Ctrl+C
         QShortcut(QKeySequence("Ctrl+W"), self, self.close)  # Ctrl+W
+        QShortcut(QKeySequence("Ctrl+Shift+Q"), self, self.close)  # Ctrl+Shift+Q
         QShortcut(QKeySequence("Esc"), self, self.close)  # Escape
         
     def scale_fonts(self, factor):
