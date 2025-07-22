@@ -76,8 +76,8 @@ class ClaudeDataWorker(QObject):
             # Get tokens for current 5-hour session
             total_tokens = self.claude_reader.get_5hour_window_tokens()
             
-            # Get rate history
-            rate_history = self.claude_reader.get_token_rate_history(session_start, interval_minutes=0.5)
+            # Skip rate history calculation - the card tracks its own rates
+            rate_history = []
             
             result = {
                 'daily': daily_data['total_cost'],

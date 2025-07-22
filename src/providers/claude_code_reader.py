@@ -181,17 +181,21 @@ class ClaudeCodeReader:
         
         # Only check files modified recently (since session start at least)
         recent_files = []
-        cutoff_time = (window_start - timedelta(hours=24)).timestamp()
+        cutoff_time = (window_start - timedelta(hours=1)).timestamp()
         
+        # Sort files by modification time and take only the most recent ones
+        files_with_mtime = []
         for jsonl_path in all_jsonl_files:
             try:
                 mtime = os.path.getmtime(jsonl_path)
                 if mtime > cutoff_time:
-                    recent_files.append(jsonl_path)
+                    files_with_mtime.append((mtime, jsonl_path))
             except:
                 continue
         
-        jsonl_files = recent_files
+        # Sort by modification time (newest first) and take only top 3
+        files_with_mtime.sort(reverse=True)
+        jsonl_files = [path for _, path in files_with_mtime[:3]]
         
         for file_path in jsonl_files:
             try:
