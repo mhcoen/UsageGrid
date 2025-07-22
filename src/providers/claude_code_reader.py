@@ -362,7 +362,7 @@ class ClaudeCodeReader:
                                         timestamp = timestamp.replace(tzinfo=None)
                                     if timestamp < since_date:
                                         if entries_processed == 0:
-                                            logger.debug(f"Skipping entry: {timestamp} < {since_date}")
+                                            # Skipping old entry
                                         continue
                             
                             # Only deduplicate entries within the time window
@@ -436,7 +436,7 @@ class ClaudeCodeReader:
                                 
                             entries_processed += 1
                             if entries_processed <= 3:
-                                logger.debug(f"Processed entry: model={model}, tokens={input_tokens + cache_read_tokens + output_tokens}, cost=${item_cost:.4f}")
+                                # Processed entry
                                 
                         except json.JSONDecodeError:
                             logger.warning(f"Invalid JSON in {file_path}: {line[:50]}...")
