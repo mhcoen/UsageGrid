@@ -29,6 +29,10 @@ class BaseProviderCard(QFrame):
         }
         # Billing URL - to be set by subclasses
         self.billing_url = None
+        # Update interval in milliseconds - to be set by subclasses
+        self.update_interval = 300000  # Default 5 minutes
+        # Whether this card should auto-update
+        self.auto_update = True
         self.setup_ui()
         
     def setup_ui(self):
@@ -82,6 +86,10 @@ class BaseProviderCard(QFrame):
     def update_display(self, data: Dict[str, Any]):
         """Update the card display with new data"""
         pass
+        
+    def fetch_data(self) -> Optional[Dict[str, Any]]:
+        """Fetch data for this card. Override in subclasses that fetch their own data."""
+        return None
         
     def update_status(self, status: str, status_type: str = "normal"):
         """Update the status label"""

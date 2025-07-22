@@ -290,16 +290,35 @@ class ModularMainWindow(QMainWindow):
         theme_selector_shortcut.activated.connect(self.show_theme_selector)
         
     def setup_timers(self):
-        """Setup update timers"""
-        # API providers - every 5 minutes
-        self.api_timer = QTimer()
-        self.api_timer.timeout.connect(self.fetch_api_providers)
-        self.api_timer.start(300000)  # 5 minutes
+        """Setup update timers based on card requirements"""
+        self.card_timers = {}
         
-        # Claude Code - every 30 seconds
-        self.claude_timer = QTimer()
-        self.claude_timer.timeout.connect(self.update_claude_only)
-        self.claude_timer.start(30000)  # 30 seconds
+        # Group cards by update interval
+        interval_groups = {}
+        for provider, card in self.layout_manager.get_all_cards().items():
+            if card.auto_update and hasattr(card, 'update_interval'):
+                interval = card.update_interval
+                if interval not in interval_groups:
+                    interval_groups[interval] = []
+                interval_groups[interval].append((provider, card))
+        
+        # Create a timer for each unique interval
+        for interval, cards in interval_groups.items():
+            timer = QTimer()
+            # Create update function for this group
+            def create_update_func(card_list):
+                def update_cards():
+                    for provider, card in card_list:
+                        self.update_single_card(provider, card)
+                return update_cards
+            
+            timer.timeout.connect(create_update_func(cards))
+            timer.start(interval)
+            self.card_timers[interval] = timer
+            
+            # Log what we're setting up
+            card_names = [c[0] for c in cards]
+            logger.info(f"Set up {interval/1000}s timer for: {', '.join(card_names)}")
         
         # Cache cleanup - every 30 minutes
         self.cleanup_timer = QTimer()
@@ -364,9 +383,23 @@ class ModularMainWindow(QMainWindow):
                 card.update_theme_colors(is_dark)
             
     def fetch_all_data(self):
-        """Fetch data from all providers"""
-        self.fetch_api_providers()
-        self.update_claude_only()
+        """Initial fetch of data from all providers"""
+        for provider, card in self.layout_manager.get_all_cards().items():
+            if card.auto_update:
+                self.update_single_card(provider, card)
+        
+        # Update totals after all cards
+        daily_usage_total = 0.0
+        for provider, card in self.layout_manager.get_all_cards().items():
+            if provider in ['openai', 'anthropic', 'openrouter', 'gemini']:
+                # Get cost from card's current display if possible
+                if hasattr(card, 'cost_label') and card.cost_label.text().startswith('$'):
+                    try:
+                        cost_text = card.cost_label.text().strip('$').split()[0]
+                        daily_usage_total += float(cost_text)
+                    except:
+                        pass
+        self.update_totals_display(daily_usage_total)
         
     def fetch_api_providers(self):
         """Fetch data from API-based providers"""
@@ -634,6 +667,40 @@ class ModularMainWindow(QMainWindow):
             logger.info(f"Provider clicked: {provider_name}")
             # TODO: Show detailed view
         
+    def update_single_card(self, provider: str, card):
+        """Update a single card"""
+        try:
+            # If the card has its own fetch_data method, use it
+            if hasattr(card, 'fetch_data') and callable(card.fetch_data):
+                data = card.fetch_data()
+                if data:
+                    self.layout_manager.update_card_data(provider, data)
+            # Otherwise use the main window's fetch methods
+            elif provider == 'openai' and self.api_keys.get('openai'):
+                cost, tokens, weekly = self.fetch_openai_data()
+                data = {
+                    'cost': cost,
+                    'tokens': tokens,
+                    'status': 'Active' if cost > 0 else 'No usage today'
+                }
+                self.layout_manager.update_card_data('openai', data)
+                # Update weekly data if available
+                if hasattr(card, 'update_weekly_data'):
+                    card.update_weekly_data(weekly)
+            elif provider == 'anthropic':
+                self.update_claude_only()
+            elif provider == 'openrouter' and self.api_keys.get('openrouter'):
+                openrouter_data = self.fetch_openrouter_data()
+                data = {
+                    'cost': openrouter_data.get('usage', 0.0),
+                    'detailed_info': openrouter_data,
+                    'status': 'Active'
+                }
+                self.layout_manager.update_card_data('openrouter', data)
+            # Let other cards handle their own updates through fetch_data
+        except Exception as e:
+            logger.error(f"Error updating {provider}: {e}")
+    
     def cleanup_cache(self):
         """Periodic cleanup of caches"""
         try:

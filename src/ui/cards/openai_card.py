@@ -91,6 +91,7 @@ class OpenAICard(BaseProviderCard):
         )
         self.billing_url = "https://platform.openai.com/usage"
         self.enable_billing_link()
+        # Update every 5 minutes (default)
         
     def setup_content(self):
         """Add OpenAI-specific content"""

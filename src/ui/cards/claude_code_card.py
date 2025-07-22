@@ -90,6 +90,8 @@ class ClaudeCodeCard(BaseProviderCard):
         )
         self.billing_url = "https://console.anthropic.com/settings/billing"
         self.enable_billing_link()
+        # Update every 30 seconds
+        self.update_interval = 30000
         
         # Theme colors
         self.progress_bar_bg = "#e0e0e0"
