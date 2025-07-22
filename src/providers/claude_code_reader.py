@@ -221,9 +221,12 @@ class ClaudeCodeReader:
                 
         return total_input + total_output
     
-    def get_session_output_tokens(self, session_start: datetime) -> int:
-        """Get output tokens for the current session"""
+    def get_live_output_tokens(self) -> int:
+        """Get output tokens for the last ~55 minutes (matches Claude UI)"""
+        # Claude UI seems to show approximately last 55 minutes of output tokens
         now = datetime.now(timezone.utc).replace(tzinfo=None)
+        window_start = now - timedelta(minutes=55)
+        
         total_output = 0
         
         # Find all JSONL files
@@ -253,8 +256,8 @@ class ClaudeCodeReader:
                             if timestamp.tzinfo:
                                 timestamp = timestamp.replace(tzinfo=None)
                                 
-                            # Check if in session
-                            if timestamp >= session_start and timestamp <= now:
+                            # Check if in window
+                            if timestamp >= window_start and timestamp <= now:
                                 # Extract usage data
                                 message = entry.get('message', {})
                                 usage = message.get('usage', {})

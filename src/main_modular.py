@@ -72,9 +72,9 @@ class ClaudeDataWorker(QObject):
             one_day_ago = now - timedelta(hours=24)
             daily_data = self.claude_reader.get_usage_data(since_date=one_day_ago)
             
-            # Get total non-cache tokens from session data
-            # This was the working calculation before I started messing with it
-            total_tokens = session_data.get('total_tokens', 0)
+            # Get live output tokens (matches Claude UI display)
+            # This calculates tokens in real-time as they change during conversation
+            total_tokens = self.claude_reader.get_live_output_tokens()
             
             # Get rate history
             rate_history = self.claude_reader.get_token_rate_history(session_start, interval_minutes=0.5)
