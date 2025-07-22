@@ -1,6 +1,6 @@
-# Contributing to LLM Cost Monitor
+# Contributing to UsageGrid
 
-First off, thank you for considering contributing to LLM Cost Monitor! It's people like you that make LLM Cost Monitor such a great tool.
+First off, thank you for considering contributing to UsageGrid! It's people like you that make UsageGrid such a great tool.
 
 ## Code of Conduct
 
@@ -47,8 +47,8 @@ Enhancement suggestions are tracked as GitHub issues. When creating an enhanceme
 
 1. Clone your fork:
    ```bash
-   git clone https://github.com/your-username/llm-cost-monitor.git
-   cd llm-cost-monitor
+   git clone https://github.com/your-username/usagegrid.git
+   cd usagegrid
    ```
 
 2. Create a virtual environment:

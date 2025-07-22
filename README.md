@@ -1,8 +1,8 @@
-# LLM Cost Monitor
+# UsageGrid
 
 A beautiful, real-time desktop application for monitoring usage and costs across multiple LLM providers. Track your AI spending with style.
 
-![LLM Cost Monitor](docs/images/screenshot.png)
+![UsageGrid](docs/images/screenshot.png)
 
 ## Features
 
@@ -57,8 +57,8 @@ A beautiful, real-time desktop application for monitoring usage and costs across
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/llm-cost-monitor.git
-cd llm-cost-monitor
+git clone https://github.com/yourusername/usagegrid.git
+cd usagegrid
 
 # Create a virtual environment (recommended)
 python -m venv venv

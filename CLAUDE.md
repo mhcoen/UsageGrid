@@ -1,4 +1,4 @@
-# LLM Cost Monitor Project
+# UsageGrid Project
 
 ## Project Overview
 A cross-platform desktop application to monitor real-time usage and costs across multiple LLM providers (OpenAI, Anthropic, OpenRouter, HuggingFace, and others). The app polls provider APIs every 30-60 seconds and displays spending data in an attractive dashboard.
@@ -304,7 +304,7 @@ Note: The original version may lock up due to heavy JSONL processing.
 
 ## Project Structure
 ```
-llm-costs/
+usagegrid/
 ├── src/
 │   ├── __init__.py
 │   ├── main.py                      # Application entry point
