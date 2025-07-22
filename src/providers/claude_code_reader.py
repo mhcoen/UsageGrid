@@ -78,6 +78,7 @@ class ClaudeCodeReader:
     }
     
     def __init__(self):
+        # Use the same directory as Claude Code Usage Monitor
         self.claude_dir = Path.home() / ".claude" / "projects"
         self._executor = ThreadPoolExecutor(max_workers=1)
         
@@ -171,27 +172,12 @@ class ClaudeCodeReader:
         from ..utils.session_helper import find_session_start
         window_start = find_session_start(now)
         
-        total_input = 0
-        total_output = 0
-        processed_ids: Set[str] = set()  # Deduplication
+        # Step 1: Load ALL entries and deduplicate globally (like monitor does)
+        all_entries = []
+        seen_hashes: Set[str] = set()
         
-        # Find all JSONL files
-        pattern = str(self.claude_dir / "**" / "*.jsonl")
-        all_jsonl_files = glob.glob(pattern, recursive=True)
-        
-        # Only check files modified recently (since session start at least)
-        recent_files = []
-        cutoff_time = (window_start - timedelta(hours=24)).timestamp()
-        
-        for jsonl_path in all_jsonl_files:
-            try:
-                mtime = os.path.getmtime(jsonl_path)
-                if mtime > cutoff_time:
-                    recent_files.append(jsonl_path)
-            except:
-                continue
-        
-        jsonl_files = recent_files
+        # Use rglob to match monitor's file discovery
+        jsonl_files = list(self.claude_dir.rglob("*.jsonl"))
         
         for file_path in jsonl_files:
             try:
@@ -203,11 +189,32 @@ class ClaudeCodeReader:
                         try:
                             entry = json.loads(line)
                             
-                            # Only process assistant messages
-                            if entry.get('type') != 'assistant':
+                            # Create deduplication hash (monitor's way)
+                            message = entry.get('message', {})
+                            message_id = entry.get('message_id') or message.get('id')
+                            request_id = entry.get('requestId') or entry.get('request_id')
+                            
+                            if message_id and request_id:
+                                unique_hash = f"{message_id}:{request_id}"
+                                if unique_hash in seen_hashes:
+                                    continue
+                                seen_hashes.add(unique_hash)
+                            
+                            # Check if entry has token data
+                            usage = message.get('usage', {})
+                            if not usage:
                                 continue
                                 
-                            # Check timestamp
+                            # Check if any tokens exist
+                            input_tokens = usage.get('input_tokens', 0)
+                            output_tokens = usage.get('output_tokens', 0)
+                            cache_creation = usage.get('cache_creation_input_tokens', 0)
+                            cache_read = usage.get('cache_read_input_tokens', 0)
+                            
+                            if not (input_tokens > 0 or output_tokens > 0 or cache_creation > 0 or cache_read > 0):
+                                continue
+                            
+                            # Parse timestamp
                             timestamp_str = entry.get('timestamp')
                             if not timestamp_str:
                                 continue
@@ -215,37 +222,28 @@ class ClaudeCodeReader:
                             timestamp = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
                             if timestamp.tzinfo:
                                 timestamp = timestamp.replace(tzinfo=None)
-                                
-                            # Check if in 5-hour window
-                            if timestamp < window_start or timestamp > now:
-                                continue
                             
-                            # Deduplicate entries using composite key
-                            message_id = entry.get('message_id') or entry.get('message', {}).get('id', '')
-                            request_id = entry.get('requestId') or entry.get('request_id', '')
+                            # Store entry with parsed data for session filtering
+                            all_entries.append({
+                                'timestamp': timestamp,
+                                'input_tokens': input_tokens,
+                                'output_tokens': output_tokens
+                            })
                             
-                            if message_id and request_id:
-                                entry_id = f"{message_id}:{request_id}"
-                                if entry_id in processed_ids:
-                                    continue
-                                processed_ids.add(entry_id)
-                                
-                            # Extract usage data
-                            message = entry.get('message', {})
-                            usage = message.get('usage', {})
-                            
-                            if usage:
-                                # Count only input and output tokens (not cache)
-                                total_input += usage.get('input_tokens', 0)
-                                total_output += usage.get('output_tokens', 0)
-                                
-                        except json.JSONDecodeError:
-                            continue
-                        except Exception:
+                        except:
                             continue
                             
             except Exception as e:
                 logger.error(f"Error reading file {file_path}: {e}")
+        
+        # Step 2: Filter by session window and sum tokens
+        total_input = 0
+        total_output = 0
+        
+        for entry in all_entries:
+            if window_start <= entry['timestamp'] <= now:
+                total_input += entry['input_tokens']
+                total_output += entry['output_tokens']
                 
         return total_input + total_output
     
@@ -257,7 +255,7 @@ class ClaudeCodeReader:
         
         total_output = 0
         
-        # Find all JSONL files
+        # Find all JSONL files (matching monitor's behavior)
         pattern = str(self.claude_dir / "**" / "*.jsonl")
         jsonl_files = glob.glob(pattern, recursive=True)
         
@@ -271,9 +269,7 @@ class ClaudeCodeReader:
                         try:
                             entry = json.loads(line)
                             
-                            # Only process assistant messages
-                            if entry.get('type') != 'assistant':
-                                continue
+                            # Process all entry types (not just assistant)
                                 
                             # Check timestamp
                             timestamp_str = entry.get('timestamp')
@@ -321,7 +317,7 @@ class ClaudeCodeReader:
         session_count = 0
         entries_processed = 0
         
-        # Find all JSONL files
+        # Find all JSONL files (matching monitor's behavior)
         pattern = str(self.claude_dir / "**" / "*.jsonl")
         all_jsonl_files = glob.glob(pattern, recursive=True)
         
@@ -381,19 +377,20 @@ class ClaudeCodeReader:
                             
                             # Only deduplicate entries within the time window
                             # Use composite key like Claude Monitor
-                            message_id = entry.get('message_id') or entry.get('message', {}).get('id', '')
-                            request_id = entry.get('requestId') or entry.get('request_id', '')
+                            # Note: message ID is in message.id, not top-level messageId
+                            message = entry.get('message', {})
+                            message_id = message.get('id')
+                            request_id = entry.get('requestId')
                             
-                            if message_id and request_id:
-                                entry_id = f"{message_id}:{request_id}"
-                                if entry_id in processed_ids:
-                                    # Duplicate entry skipped
-                                    continue
-                                processed_ids.add(entry_id)
+                            # Create tuple for deduplication (matching monitor's logic)
+                            unique_id = (message_id, request_id, timestamp_str)
                             
-                            # Only process assistant responses (which contain usage data)
-                            if entry.get('type') != 'assistant':
+                            if unique_id in processed_ids:
+                                # Duplicate entry skipped
                                 continue
+                            processed_ids.add(unique_id)
+                            
+                            # Process all entry types (not just assistant)
                                 
                             # Extract usage data - it's nested in message
                             message = entry.get('message', {})

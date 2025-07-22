@@ -64,9 +64,10 @@ def find_session_start(now: datetime, claude_dir: Path = None) -> datetime:
     pattern = str(claude_dir / "**" / "*.jsonl")
     all_jsonl_files = glob.glob(pattern, recursive=True)
     
-    # Only check files modified in the last 24 hours to speed up search
+    # Only check files modified in the last 48 hours to speed up search
+    # Need to look back far enough to find session boundaries
     recent_files = []
-    cutoff_time = (now - timedelta(hours=24)).timestamp()
+    cutoff_time = (now - timedelta(hours=48)).timestamp()
     
     for jsonl_path in all_jsonl_files:
         try:
@@ -106,11 +107,21 @@ def find_session_start(now: datetime, claude_dir: Path = None) -> datetime:
     
     # Find session starts
     # Sessions start on the hour and last 5 hours
+    # A new session also starts if there's a 5+ hour gap between messages
     session_starts = []
     
-    for timestamp in all_timestamps:
+    for i, timestamp in enumerate(all_timestamps):
         # Round this timestamp down to the hour
         hour_aligned = timestamp.replace(minute=0, second=0, microsecond=0)
+        
+        # Check for 5+ hour gap from previous message
+        if i > 0:
+            prev_timestamp = all_timestamps[i-1]
+            gap = (timestamp - prev_timestamp).total_seconds() / 3600  # gap in hours
+            if gap >= 5:
+                # 5+ hour gap detected - start new session
+                session_starts.append(hour_aligned)
+                continue
         
         # Check if this timestamp fits in any existing session
         fits_in_existing = False
@@ -127,12 +138,20 @@ def find_session_start(now: datetime, claude_dir: Path = None) -> datetime:
     # Sort session starts
     session_starts.sort()
     
+    # Debug: log the last few session starts
+    if session_starts:
+        logger.info(f"Total sessions found: {len(session_starts)}")
+        logger.info(f"Last 5 session starts (UTC):")
+        for ss in session_starts[-5:]:
+            logger.info(f"  {ss}")
+    
     # Find the current active session
     current_session_start = None
     for session_start in reversed(session_starts):
         session_end = session_start + timedelta(hours=5)
         if session_start <= now <= session_end:
             current_session_start = session_start
+            logger.info(f"Found active session: {session_start} UTC (ends {session_end} UTC)")
             # Cache the session info
             _session_cache['session_start'] = session_start
             _session_cache['session_end'] = session_end
