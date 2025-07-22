@@ -72,14 +72,8 @@ class ClaudeDataWorker(QObject):
             one_day_ago = now - timedelta(hours=24)
             daily_data = self.claude_reader.get_usage_data(since_date=one_day_ago)
             
-            # Calculate total tokens (including cache tokens)
-            total_tokens = 0
-            if session_data['model_breakdown']:
-                for model_stats in session_data['model_breakdown'].values():
-                    total_tokens += model_stats.get('input_tokens', 0)
-                    total_tokens += model_stats.get('cache_read_tokens', 0)
-                    total_tokens += model_stats.get('cache_creation_tokens', 0)
-                    total_tokens += model_stats.get('output_tokens', 0)
+            # Use non-cache tokens from the session data
+            total_tokens = session_data.get('total_tokens', 0)
             
             # Get rate history
             rate_history = self.claude_reader.get_token_rate_history(session_start, interval_minutes=0.5)

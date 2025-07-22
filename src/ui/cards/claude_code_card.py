@@ -222,6 +222,8 @@ class ClaudeCodeCard(BaseProviderCard):
         token_limit = plan_info.get("session_token_limit", 220000)
         self.token_limit = token_limit
         
+        logger.debug(f"Token limit: {token_limit}, current tokens: {tokens}, percentage: {(tokens / token_limit * 100) if token_limit > 0 else 0:.1f}%")
+        
         # Update session start time
         if session_start:
             self.session_start_time = session_start
@@ -243,8 +245,14 @@ class ClaudeCodeCard(BaseProviderCard):
         # Calculate token percentage
         token_percentage = (tokens / token_limit * 100) if token_limit > 0 else 0
         
-        # Update progress bar based on tokens
-        self.progress_bar.setValue(int(token_percentage))
+        # Update progress bar based on tokens (cap at 100%)
+        self.progress_bar.setValue(min(100, int(token_percentage)))
+        
+        # Update progress bar format based on whether we're over limit
+        if token_percentage > 100:
+            self.progress_bar.setFormat(f"{int(token_percentage)}% of token limit")
+        else:
+            self.progress_bar.setFormat("%p% of token limit")
         
         # Color code the progress bar based on token usage
         self._update_progress_bar_color(token_percentage)

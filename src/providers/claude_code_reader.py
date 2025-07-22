@@ -177,6 +177,8 @@ class ClaudeCodeReader:
         total_cost = 0.0
         total_input_tokens = 0
         total_output_tokens = 0
+        total_cache_read_tokens = 0
+        total_cache_creation_tokens = 0
         model_breakdown = {}
         session_count = 0
         entries_processed = 0
@@ -281,8 +283,10 @@ class ClaudeCodeReader:
                             
                             # Update totals
                             total_cost += item_cost
-                            total_input_tokens += input_tokens + cache_creation_tokens + cache_read_tokens
+                            total_input_tokens += input_tokens
                             total_output_tokens += output_tokens
+                            total_cache_read_tokens += cache_read_tokens
+                            total_cache_creation_tokens += cache_creation_tokens
                             
                             # Update model breakdown
                             if model not in model_breakdown:
@@ -319,11 +323,16 @@ class ClaudeCodeReader:
                 logger.error(f"Error reading file {file_path}: {e}")
                 
         logger.debug(f"Processed {entries_processed} entries with usage data")
+        
+        # Return both cache and non-cache tokens
         return {
             "total_cost": total_cost,
             "total_input_tokens": total_input_tokens,
             "total_output_tokens": total_output_tokens,
-            "total_tokens": total_input_tokens + total_output_tokens,
+            "total_cache_read_tokens": total_cache_read_tokens,
+            "total_cache_creation_tokens": total_cache_creation_tokens,
+            "total_tokens": total_input_tokens + total_output_tokens,  # Non-cache tokens only
+            "total_tokens_with_cache": total_input_tokens + total_output_tokens + total_cache_read_tokens + total_cache_creation_tokens,
             "model_breakdown": model_breakdown,
             "session_count": session_count,
             "file_count": len(jsonl_files),
