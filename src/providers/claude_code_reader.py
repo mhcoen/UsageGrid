@@ -166,7 +166,11 @@ class ClaudeCodeReader:
     def get_5hour_window_tokens(self) -> int:
         """Get tokens for the current 5-hour window (matches Claude's billing window)"""
         now = datetime.now(timezone.utc).replace(tzinfo=None)
-        window_start = now - timedelta(hours=5)
+        # Calculate the start of the current 5-hour block
+        # Blocks start at 0:00, 5:00, 10:00, 15:00, 20:00
+        current_hour = now.hour
+        block_start_hour = (current_hour // 5) * 5
+        window_start = now.replace(hour=block_start_hour, minute=0, second=0, microsecond=0)
         
         total_input = 0
         total_output = 0
