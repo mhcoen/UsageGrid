@@ -72,7 +72,7 @@ class ClaudeDataWorker(QObject):
             one_day_ago = now - timedelta(hours=24)
             daily_data = self.claude_reader.get_usage_data(since_date=one_day_ago)
             
-            # Get tokens for current 5-hour window
+            # Get tokens for current 5-hour session
             total_tokens = self.claude_reader.get_5hour_window_tokens()
             
             # Get rate history

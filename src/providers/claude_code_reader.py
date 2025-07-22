@@ -166,14 +166,14 @@ class ClaudeCodeReader:
     def get_5hour_window_tokens(self) -> int:
         """Get tokens for the current 5-hour window (matches Claude's billing window)"""
         now = datetime.now(timezone.utc).replace(tzinfo=None)
-        # Calculate the start of the current 5-hour block
-        # Blocks start at 0:00, 5:00, 10:00, 15:00, 20:00
-        current_hour = now.hour
-        block_start_hour = (current_hour // 5) * 5
-        window_start = now.replace(hour=block_start_hour, minute=0, second=0, microsecond=0)
+        
+        # Find the actual session start using the session helper
+        from ..utils.session_helper import find_session_start
+        window_start = find_session_start(now)
         
         total_input = 0
         total_output = 0
+        processed_ids: Set[str] = set()  # Deduplication
         
         # Find all JSONL files
         pattern = str(self.claude_dir / "**" / "*.jsonl")
@@ -205,6 +205,16 @@ class ClaudeCodeReader:
                             # Check if in 5-hour window
                             if timestamp < window_start or timestamp > now:
                                 continue
+                            
+                            # Deduplicate entries using composite key
+                            message_id = entry.get('message_id') or entry.get('message', {}).get('id', '')
+                            request_id = entry.get('requestId') or entry.get('request_id', '')
+                            
+                            if message_id and request_id:
+                                entry_id = f"{message_id}:{request_id}"
+                                if entry_id in processed_ids:
+                                    continue
+                                processed_ids.add(entry_id)
                                 
                             # Extract usage data
                             message = entry.get('message', {})
@@ -226,10 +236,10 @@ class ClaudeCodeReader:
         return total_input + total_output
     
     def get_live_output_tokens(self) -> int:
-        """Get output tokens for the last ~55 minutes (matches Claude UI)"""
-        # Claude UI seems to show approximately last 55 minutes of output tokens
+        """Get output tokens for the last 60 minutes (matches Claude UI)"""
+        # Claude UI shows last 60 minutes of output tokens
         now = datetime.now(timezone.utc).replace(tzinfo=None)
-        window_start = now - timedelta(minutes=55)
+        window_start = now - timedelta(minutes=60)
         
         total_output = 0
         
