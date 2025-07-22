@@ -300,35 +300,16 @@ class ModularMainWindow(QMainWindow):
         theme_selector_shortcut.activated.connect(self.show_theme_selector)
         
     def setup_timers(self):
-        """Setup update timers based on card requirements"""
-        self.card_timers = {}
+        """Setup update timers"""
+        # API providers update every 5 minutes
+        self.api_timer = QTimer()
+        self.api_timer.timeout.connect(self.fetch_api_providers)
+        self.api_timer.start(300000)  # 5 minutes
         
-        # Group cards by update interval
-        interval_groups = {}
-        for provider, card in self.layout_manager.get_all_cards().items():
-            if card.auto_update and hasattr(card, 'update_interval'):
-                interval = card.update_interval
-                if interval not in interval_groups:
-                    interval_groups[interval] = []
-                interval_groups[interval].append((provider, card))
-        
-        # Create a timer for each unique interval
-        for interval, cards in interval_groups.items():
-            timer = QTimer()
-            # Create update function for this group
-            def create_update_func(card_list):
-                def update_cards():
-                    for provider, card in card_list:
-                        self.update_single_card(provider, card)
-                return update_cards
-            
-            timer.timeout.connect(create_update_func(cards))
-            timer.start(interval)
-            self.card_timers[interval] = timer
-            
-            # Log what we're setting up
-            card_names = [c[0] for c in cards]
-            logger.info(f"Set up {interval/1000}s timer for: {', '.join(card_names)}")
+        # Claude Code update every 30 seconds
+        self.claude_timer = QTimer()
+        self.claude_timer.timeout.connect(self.update_claude_only)
+        self.claude_timer.start(30000)  # 30 seconds
         
         # Cache cleanup - every 30 minutes
         self.cleanup_timer = QTimer()
@@ -394,26 +375,10 @@ class ModularMainWindow(QMainWindow):
             
     def fetch_all_data(self):
         """Initial fetch of data from all providers"""
-        logger.info(f"Fetching data for all cards: {list(self.layout_manager.get_all_cards().keys())}")
-        for provider, card in self.layout_manager.get_all_cards().items():
-            if card.auto_update:
-                logger.info(f"Updating {provider} card")
-                self.update_single_card(provider, card)
-            else:
-                logger.info(f"Skipping {provider} - auto_update is False")
-        
-        # Update totals after all cards
-        daily_usage_total = 0.0
-        for provider, card in self.layout_manager.get_all_cards().items():
-            if provider in ['openai', 'anthropic', 'openrouter', 'gemini']:
-                # Get cost from card's current display if possible
-                if hasattr(card, 'cost_label') and card.cost_label.text().startswith('$'):
-                    try:
-                        cost_text = card.cost_label.text().strip('$').split()[0]
-                        daily_usage_total += float(cost_text)
-                    except:
-                        pass
-        self.update_totals_display(daily_usage_total)
+        # Fetch API providers
+        self.fetch_api_providers()
+        # Fetch Claude Code data
+        self.update_claude_only()
         
     def fetch_api_providers(self):
         """Fetch data from API-based providers"""
@@ -830,9 +795,8 @@ class ModularMainWindow(QMainWindow):
     def closeEvent(self, event):
         """Handle window close"""
         self.claude_worker.stop()
-        # Stop all card timers
-        for timer in self.card_timers.values():
-            timer.stop()
+        self.api_timer.stop()
+        self.claude_timer.stop()
         self.cleanup_timer.stop()
         event.accept()
 

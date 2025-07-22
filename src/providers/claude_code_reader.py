@@ -207,6 +207,10 @@ class ClaudeCodeReader:
         logger.info(f"Found {len(jsonl_files)} JSONL files")
         if jsonl_files:
             logger.debug(f"Files to process: {[os.path.basename(f) for f in jsonl_files[:3]]}...")
+            # Check if our active session file is in the list
+            active_file = "46f8cfca-4c8d-4d80-bf47-e38d8d15d198.jsonl"
+            if any(active_file in f for f in jsonl_files):
+                logger.debug(f"Active session file {active_file} is in the list")
         
         for file_path in jsonl_files:
             try:
@@ -228,6 +232,8 @@ class ClaudeCodeReader:
                                     if timestamp.tzinfo:
                                         timestamp = timestamp.replace(tzinfo=None)
                                     if timestamp < since_date:
+                                        if entries_processed == 0:
+                                            logger.debug(f"Skipping entry: {timestamp} < {since_date}")
                                         continue
                             
                             # Only deduplicate entries within the time window
@@ -238,6 +244,7 @@ class ClaudeCodeReader:
                             if message_id and request_id:
                                 entry_id = f"{message_id}:{request_id}"
                                 if entry_id in processed_ids:
+                                    logger.debug(f"Skipping duplicate entry: {entry_id}")
                                     continue
                                 processed_ids.add(entry_id)
                             
