@@ -47,13 +47,29 @@ class ThemeManager(QObject):
         return f"""
         QFrame {{
             background-color: {self.get_color('card_background')};
+            border: 2px solid {border_color};
             border-radius: 10px;
         }}
         QFrame:hover {{
             background-color: {self.get_color('card_hover', self.get_color('card_background'))};
+            border: 2px solid {border_color};
         }}
-        QLabel {{
+        QFrame > QLabel {{
             color: {self.get_color('text_primary')};
+            border: none !important;
+            background: transparent;
+            padding: 0px;
+        }}
+        QFrame QLabel {{
+            border: none !important;
+        }}
+        QFrame QWidget {{
+            border: none !important;
+            background: transparent;
+        }}
+        QFrame QProgressBar {{
+            border: 1px solid #e0e0e0;
+            background-color: #e0e0e0;
         }}
         """
         

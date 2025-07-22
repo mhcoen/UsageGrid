@@ -19,7 +19,7 @@ from PyQt6.QtGui import QFont, QKeySequence, QShortcut, QAction
 # Add path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from src.providers.claude_code_reader import ClaudeCodeReader
+from src.providers.claude_code_reader_optimized import ClaudeCodeReaderOptimized as ClaudeCodeReader
 from src.utils.session_helper import find_session_start
 from src.core.cache_db import CacheDB
 from src.ui.layout_manager import LayoutManager
@@ -88,6 +88,7 @@ class ClaudeDataWorker(QObject):
                 'tokens': non_cache_tokens,
                 'session_start': session_start,
                 'rate_history': rate_history,
+                'model_breakdown': session_data.get('model_breakdown', {}),
                 'success': True
             }
             
@@ -171,7 +172,10 @@ class ModularMainWindow(QMainWindow):
     def setup_ui(self):
         """Setup the UI"""
         self.setWindowTitle("UsageGrid")
-        self.setMinimumSize(480, 470)
+        # Calculate exact window size: 2 columns of 220px + 1px gap + 2px margins = 443px width
+        # But we need extra width for header/info indents: 443 + 10 = 453px
+        # Height: header(~25) + info(~20) + 2 rows(420) + gap(2) + spacing(2) + margins(2) ≈ 471px
+        self.setFixedSize(453, 471)
         
         # Central widget
         central_widget = QWidget()
@@ -179,11 +183,12 @@ class ModularMainWindow(QMainWindow):
         
         # Main layout
         layout = QVBoxLayout()
-        layout.setContentsMargins(5, 5, 5, 5)
-        layout.setSpacing(5)
+        layout.setContentsMargins(1, 1, 1, 1)  # 1px margins on all sides
+        layout.setSpacing(1)  # Reduced vertical spacing from 3 to 1
         
         # Header with daily and subscription totals
         header_layout = QHBoxLayout()
+        header_layout.setContentsMargins(5, 0, 5, 0)  # Add 5px indent on both sides
         
         self.daily_total_label = QLabel("Daily: $0.00")
         font = QFont()
@@ -205,6 +210,8 @@ class ModularMainWindow(QMainWindow):
         
         # Info bar
         info_layout = QHBoxLayout()
+        info_layout.setContentsMargins(5, 0, 5, 0)  # Same 5px indent as header
+        
         self.info_label = QLabel("Fetching real API data...")
         self.info_label.setStyleSheet("color: gray;")
         info_layout.addWidget(self.info_label)
@@ -225,7 +232,6 @@ class ModularMainWindow(QMainWindow):
         for card in self.layout_manager.get_all_cards().values():
             card.clicked.connect(self.on_provider_clicked)
         
-        layout.addStretch()
         central_widget.setLayout(layout)
         
         # Setup keyboard shortcuts
@@ -278,6 +284,11 @@ class ModularMainWindow(QMainWindow):
         self.claude_timer = QTimer()
         self.claude_timer.timeout.connect(self.update_claude_only)
         self.claude_timer.start(30000)  # 30 seconds
+        
+        # Cache cleanup - every 30 minutes
+        self.cleanup_timer = QTimer()
+        self.cleanup_timer.timeout.connect(self.cleanup_cache)
+        self.cleanup_timer.start(1800000)  # 30 minutes
         
     def scale_fonts(self, factor):
         """Scale all fonts by factor"""
@@ -371,16 +382,17 @@ class ModularMainWindow(QMainWindow):
             daily_usage_total += cost
             
         # Gemini
-        if self.api_keys.get("gemini"):
-            cost, requests = self.fetch_gemini_data()
-            if cost >= 0:
-                data = {
-                    'cost': cost,
-                    'requests': requests,
-                    'status': 'Active' if cost > 0 else 'No usage'
-                }
-                self.layout_manager.update_card_data('gemini', data)
-                daily_usage_total += cost
+        gemini_card = self.layout_manager.get_card('gemini')
+        if gemini_card and hasattr(gemini_card, 'fetch_data'):
+            data = gemini_card.fetch_data()
+            self.layout_manager.update_card_data('gemini', data)
+            daily_usage_total += data.get('cost', 0.0)
+            
+        # GitHub (not part of daily usage total - it's not an LLM cost)
+        github_card = self.layout_manager.get_card('github')
+        if github_card and hasattr(github_card, 'fetch_data'):
+            data = github_card.fetch_data()
+            self.layout_manager.update_card_data('github', data)
                 
         # Update totals
         self.update_totals_display(daily_usage_total)
@@ -494,98 +506,6 @@ class ModularMainWindow(QMainWindow):
             logger.error(f"Error fetching OpenRouter data: {e}")
             return {"usage": 0.0, "limit": None, "is_free_tier": False}
             
-    def fetch_gemini_data(self) -> tuple[float, int]:
-        """Fetch Gemini usage data"""
-        try:
-            project_id = os.getenv("GOOGLE_CLOUD_PROJECT")
-            if not project_id:
-                return 0.0, 0
-                
-            # Import Google Cloud libraries
-            try:
-                from google.cloud import monitoring_v3
-                import google.auth
-            except ImportError:
-                logger.error("Google Cloud packages not installed")
-                return -1, 0
-                
-            # Get credentials
-            try:
-                credentials, _ = google.auth.default()
-            except Exception:
-                return -1, 0
-                
-            # Use monitoring API for request counts
-            monitoring_client = monitoring_v3.MetricServiceClient(credentials=credentials)
-            
-            project_name = f"projects/{project_id}"
-            interval = monitoring_v3.TimeInterval(
-                {
-                    "end_time": {"seconds": int(datetime.now().timestamp())},
-                    "start_time": {"seconds": int((datetime.now() - timedelta(hours=24)).timestamp())},
-                }
-            )
-            
-            # Query for Vertex AI requests - need separate queries due to API restrictions
-            total_requests = 0
-            
-            # Query online predictions
-            try:
-                results = monitoring_client.list_time_series(
-                    request={
-                        "name": project_name,
-                        "filter": 'metric.type="aiplatform.googleapis.com/prediction/online/request_count"',
-                        "interval": interval,
-                    }
-                )
-                
-                gemini_models = ["gemini", "text-bison", "chat-bison"]
-                for result in results:
-                    resource_labels = result.resource.labels
-                    model_id = resource_labels.get("model_id", "").lower()
-                    
-                    if model_id:
-                        logger.debug(f"Found Vertex AI model: {model_id}")
-                        
-                    if any(gemini_model in model_id for gemini_model in gemini_models) or not model_id:
-                        for point in result.points:
-                            total_requests += point.value.int64_value
-            except Exception:
-                pass
-                
-            # Query model predictions
-            try:
-                results = monitoring_client.list_time_series(
-                    request={
-                        "name": project_name,
-                        "filter": 'metric.type="aiplatform.googleapis.com/prediction/model/request_count"',
-                        "interval": interval,
-                    }
-                )
-                
-                for result in results:
-                    resource_labels = result.resource.labels
-                    model_id = resource_labels.get("model_id", "").lower()
-                    
-                    if model_id:
-                        logger.debug(f"Found Vertex AI model: {model_id}")
-                        
-                    if any(gemini_model in model_id for gemini_model in gemini_models) or not model_id:
-                        for point in result.points:
-                            total_requests += point.value.int64_value
-            except Exception:
-                pass
-                        
-            # Estimate cost
-            estimated_cost_per_request = 0.0025 + (0.01 * 2)
-            estimated_daily_cost = total_requests * estimated_cost_per_request
-            
-            logger.info(f"Gemini: {total_requests} requests, estimated ${estimated_daily_cost:.2f}")
-            return estimated_daily_cost, total_requests
-            
-        except Exception as e:
-            logger.error(f"Error fetching Gemini data: {e}")
-            return 0.0, 0
             
     def update_claude_only(self):
         """Update only Claude Code data"""
@@ -599,7 +519,8 @@ class ModularMainWindow(QMainWindow):
                     'tokens': claude_data['tokens'],
                     'is_active': claude_data['tokens'] > 0,
                     'session_start': claude_data.get('session_start'),
-                    'initial_rate_data': claude_data.get('rate_history', [])
+                    'initial_rate_data': claude_data.get('rate_history', []),
+                    'model_breakdown': claude_data.get('model_breakdown', {})
                 }
                 self.layout_manager.update_card_data('anthropic', data)
                 
@@ -616,7 +537,7 @@ class ModularMainWindow(QMainWindow):
             if time_since_update < 25 and self.cached_claude_data:
                 return self.cached_claude_data
                 
-        # Find current session
+        # Find current session from actual data
         session_start = find_session_start(now)
         
         # Start background fetch if not already running
@@ -647,7 +568,8 @@ class ModularMainWindow(QMainWindow):
                 'tokens': data['tokens'],
                 'is_active': data['tokens'] > 0,
                 'session_start': data.get('session_start'),
-                'initial_rate_data': data.get('rate_history', [])
+                'initial_rate_data': data.get('rate_history', []),
+                'model_breakdown': data.get('model_breakdown', {})
             }
             self.layout_manager.update_card_data('anthropic', card_data)
             
@@ -687,11 +609,19 @@ class ModularMainWindow(QMainWindow):
         logger.info(f"Provider clicked: {provider_name}")
         # TODO: Show detailed view
         
+    def cleanup_cache(self):
+        """Periodic cleanup of caches"""
+        try:
+            self.claude_reader.clear_old_cache()
+        except Exception as e:
+            logger.error(f"Error during cache cleanup: {e}")
+        
     def closeEvent(self, event):
         """Handle window close"""
         self.claude_worker.stop()
         self.api_timer.stop()
         self.claude_timer.stop()
+        self.cleanup_timer.stop()
         event.accept()
 
 

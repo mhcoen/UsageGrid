@@ -4,7 +4,7 @@ Layout manager for configurable card layouts
 from typing import Dict, List, Any, Optional
 from PyQt6.QtWidgets import QWidget, QGridLayout, QVBoxLayout
 from .card_registry import CardRegistry
-from .base_card import BaseProviderCard
+from .cards.base_card import BaseProviderCard
 
 
 class LayoutManager:
@@ -17,7 +17,8 @@ class LayoutManager:
     def create_layout(self, parent: QWidget) -> QGridLayout:
         """Create the grid layout with cards based on configuration"""
         grid = QGridLayout()
-        grid.setSpacing(10)
+        grid.setHorizontalSpacing(1)  # Reduced column gap by 50%
+        grid.setVerticalSpacing(2)  # Keep vertical spacing at 2px
         
         # Process each card/stack in the configuration
         for card_config in self.layout_config.get('cards', []):
@@ -29,7 +30,7 @@ class LayoutManager:
                 stack_widget = QWidget()
                 stack_layout = QVBoxLayout()
                 stack_layout.setContentsMargins(0, 0, 0, 0)
-                stack_layout.setSpacing(10)
+                stack_layout.setSpacing(2)  # Reduced from 5 to 2
                 
                 for stack_card_config in card_config['stack']:
                     card = self._create_card(stack_card_config)

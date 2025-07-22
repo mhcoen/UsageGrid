@@ -4,11 +4,13 @@ Card registry for dynamic card creation based on configuration
 from typing import Dict, Type, Any, Optional
 from PyQt6.QtWidgets import QWidget
 
-from .base_card import BaseProviderCard
-from .simple_card import SimpleCard
-from .openai_card import OpenAICard
-from .openrouter_card import OpenRouterCard
-from .claude_code_card import ClaudeCodeCard
+from .cards.base_card import BaseProviderCard
+from .cards.simple_card import SimpleCard
+from .cards.openai_card import OpenAICard
+from .cards.openrouter_card import OpenRouterCard
+from .cards.claude_code_card import ClaudeCodeCard
+from .cards.gemini_card import GeminiCard
+from .cards.github_card import GitHubCard
 
 
 class CardRegistry:
@@ -20,6 +22,8 @@ class CardRegistry:
         'openai': OpenAICard,
         'openrouter': OpenRouterCard,
         'claude_code': ClaudeCodeCard,
+        'gemini': GeminiCard,
+        'github': GitHubCard,
     }
     
     @classmethod
@@ -47,7 +51,7 @@ class CardRegistry:
         size = (220, 210)  # Default
         if 'size' in provider_config:
             if provider_config['size'] == 'half':
-                size = (220, 100)
+                size = (220, 104)  # Half height with 2px spacing = 210px total
             elif isinstance(provider_config['size'], list) and len(provider_config['size']) == 2:
                 size = tuple(provider_config['size'])
                 
@@ -74,6 +78,12 @@ class CardRegistry:
             
         elif card_type == 'claude_code':
             return ClaudeCodeCard()
+            
+        elif card_type == 'gemini':
+            return GeminiCard()
+            
+        elif card_type == 'github':
+            return GitHubCard()
             
         else:
             # Generic card creation for custom types

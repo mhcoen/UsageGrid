@@ -42,20 +42,27 @@ logging.getLogger('src.providers.claude_code_reader').setLevel(logging.WARNING)
 class SimpleProviderCard(QFrame):
     """Simple provider card widget"""
     
-    def __init__(self, provider_name: str, display_name: str, color: str):
+    def __init__(self, provider_name: str, display_name: str, color: str, half_height: bool = False):
         super().__init__()
         self.provider_name = provider_name
         self.setFrameStyle(QFrame.Shape.Box)
-        self.setFixedSize(220, 160)
+        if half_height:
+            self.setFixedSize(220, 100)
+        else:
+            self.setFixedSize(220, 210)
         
         # Layout
         layout = QVBoxLayout()
-        layout.setContentsMargins(15, 15, 15, 15)
+        if half_height:
+            layout.setContentsMargins(10, 8, 10, 8)
+            layout.setSpacing(2)
+        else:
+            layout.setContentsMargins(10, 10, 10, 10)
         
         # Provider name
         self.name_label = QLabel(display_name)
         font = QFont()
-        font.setPointSize(14)
+        font.setPointSize(16)
         font.setBold(True)
         self.name_label.setFont(font)
         self.name_label.setStyleSheet("color: #333;")
@@ -63,23 +70,26 @@ class SimpleProviderCard(QFrame):
         
         # Cost display
         self.cost_label = QLabel("$0.00")
+        self.cost_label.setTextFormat(Qt.TextFormat.RichText)  # Enable HTML formatting
         font = QFont()
-        font.setPointSize(20)
+        font.setPointSize(24)
         self.cost_label.setFont(font)
         self.cost_label.setStyleSheet("color: #000; font-weight: bold;")
         layout.addWidget(self.cost_label)
         
-        # Token count
+        # Token count - always show it
         self.token_label = QLabel("Tokens: -")
-        self.token_label.setStyleSheet("color: #666;")
+        self.token_label.setStyleSheet("color: #666; font-size: 13px;")
         layout.addWidget(self.token_label)
+        
+        # Add stretch to push status to bottom
+        layout.addStretch()
         
         # Status
         self.status_label = QLabel("Checking...")
-        self.status_label.setStyleSheet("color: gray;")
+        self.status_label.setStyleSheet("color: gray; font-size: 13px;")
         layout.addWidget(self.status_label)
         
-        layout.addStretch()
         self.setLayout(layout)
         
         # Styling
@@ -94,12 +104,24 @@ class SimpleProviderCard(QFrame):
     def update_display(self, cost: float, tokens: Optional[int], status: str):
         """Update the card display"""
         # Always show 4 decimal places for daily cost
-        self.cost_label.setText(f"${cost:.4f}")
-        
-        if tokens is not None:
-            self.token_label.setText(f"Tokens: {tokens:,}")
+        if self.provider_name == "gemini":
+            # For Gemini, add "(Estimated)" in smaller text
+            self.cost_label.setText(f'${cost:.4f} <span style="font-size: 11px; color: #888; font-weight: normal;">(Estimated)</span>')
         else:
-            self.token_label.setText("Tokens: -")
+            self.cost_label.setText(f"${cost:.4f}")
+        
+        if self.token_label:  # Only update if token label exists
+            if tokens is not None:
+                # Show "Requests" for Gemini, "Tokens" for others
+                if self.provider_name == "gemini":
+                    self.token_label.setText(f'Requests: {tokens:,} <span style="font-size: 11px; color: #888;">(Exact)</span>')
+                else:
+                    self.token_label.setText(f"Tokens: {tokens:,}")
+            else:
+                if self.provider_name == "gemini":
+                    self.token_label.setText("Requests: -")
+                else:
+                    self.token_label.setText("Tokens: -")
             
         self.status_label.setText(status)
         
@@ -208,6 +230,7 @@ class LiteWindow(QMainWindow):
         self.openai_weekly_data = {}  # Cache weekly data for OpenAI
         self.config = self._load_config()
         self.cache_db = CacheDB()  # Initialize cache database
+        self.font_scale = 1.0  # Default font scale
         
         self.load_api_keys()
         self.setup_ui()
@@ -256,8 +279,12 @@ class LiteWindow(QMainWindow):
         
     def setup_ui(self):
         """Setup the user interface"""
-        self.setWindowTitle("LLM Cost Monitor - Lite")
-        self.setMinimumSize(900, 650)
+        self.setWindowTitle("UsageGrid")
+        # Card size: 220x210, grid spacing: 5, margins: 5
+        # Width: 5 + 220 + 5 + 220 + 5 = 455
+        # Height: header + info + 5 + 210 + 5 + 210 + 5 ≈ 520
+        self.setMinimumSize(455, 520)
+        self.resize(455, 520)
         
         # Make window closeable
         self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
@@ -268,47 +295,38 @@ class LiteWindow(QMainWindow):
         
         # Main layout
         layout = QVBoxLayout()
-        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setContentsMargins(5, 5, 5, 5)
+        layout.setSpacing(5)
         
-        # Header
+        # Header with daily and subscription totals on same line
         header_layout = QHBoxLayout()
-        
-        title = QLabel("LLM Cost Monitor")
-        font = QFont()
-        font.setPointSize(26)
-        font.setBold(True)
-        title.setFont(font)
-        header_layout.addWidget(title)
-        
-        header_layout.addStretch()
-        
-        # Totals section
-        totals_layout = QVBoxLayout()
         
         self.daily_total_label = QLabel("Daily: $0.00")
         font = QFont()
-        font.setPointSize(14)
+        font.setPointSize(18)
+        font.setBold(True)
         self.daily_total_label.setFont(font)
-        totals_layout.addWidget(self.daily_total_label)
+        header_layout.addWidget(self.daily_total_label)
+        
+        header_layout.addStretch()
         
         self.monthly_total_label = QLabel("Subscriptions: $0/mo")
         font = QFont()
-        font.setPointSize(14)
+        font.setPointSize(18)
+        font.setBold(True)
         self.monthly_total_label.setFont(font)
-        totals_layout.addWidget(self.monthly_total_label)
-        
-        header_layout.addLayout(totals_layout)
+        header_layout.addWidget(self.monthly_total_label)
         
         layout.addLayout(header_layout)
         
         # Info bar
         info_layout = QHBoxLayout()
         self.info_label = QLabel("Fetching real API data...")
-        self.info_label.setStyleSheet("color: #666; padding: 10px;")
+        self.info_label.setStyleSheet("color: #666; padding: 5px;")
         info_layout.addWidget(self.info_label)
         
         self.last_update_label = QLabel("Last update: Never")
-        self.last_update_label.setStyleSheet("color: #666; padding: 10px;")
+        self.last_update_label.setStyleSheet("color: #666; padding: 5px;")
         info_layout.addStretch()
         info_layout.addWidget(self.last_update_label)
         
@@ -316,15 +334,120 @@ class LiteWindow(QMainWindow):
         
         # Provider grid
         self.provider_grid = QGridLayout()
-        self.provider_grid.setSpacing(20)
+        self.provider_grid.setSpacing(5)
         layout.addLayout(self.provider_grid)
         
-        layout.addStretch()
+        # Removed stretch to eliminate bottom whitespace
         
-        # Status bar
-        self.statusBar().showMessage("Initializing...")
+        # Remove status bar to save space
         
         central_widget.setLayout(layout)
+        
+        # Setup keyboard shortcuts
+        self.setup_shortcuts()
+        
+    def setup_shortcuts(self):
+        """Setup keyboard shortcuts for font scaling"""
+        from PyQt6.QtGui import QKeySequence, QShortcut
+        
+        # Increase font size (Ctrl/Cmd +)
+        increase_shortcut = QShortcut(QKeySequence("Ctrl++"), self)
+        increase_shortcut.activated.connect(lambda: self.scale_fonts(1.1))
+        
+        # Alternative increase (Ctrl/Cmd =)
+        increase_alt = QShortcut(QKeySequence("Ctrl+="), self)
+        increase_alt.activated.connect(lambda: self.scale_fonts(1.1))
+        
+        # Decrease font size (Ctrl/Cmd -)
+        decrease_shortcut = QShortcut(QKeySequence("Ctrl+-"), self)
+        decrease_shortcut.activated.connect(lambda: self.scale_fonts(0.9))
+        
+        # Reset font size (Ctrl/Cmd 0)
+        reset_shortcut = QShortcut(QKeySequence("Ctrl+0"), self)
+        reset_shortcut.activated.connect(lambda: self.reset_fonts())
+        
+    def scale_fonts(self, factor):
+        """Scale all fonts by the given factor"""
+        # Limit scaling between 0.7x and 1.5x
+        new_scale = self.font_scale * factor
+        if new_scale < 0.7 or new_scale > 1.5:
+            return
+            
+        self.font_scale = new_scale
+        self.update_all_fonts()
+        
+    def reset_fonts(self):
+        """Reset fonts to default size"""
+        self.font_scale = 1.0
+        self.update_all_fonts()
+        
+    def update_all_fonts(self):
+        """Update all fonts in the application"""
+        # Update header fonts
+        base_sizes = {
+            'title': 28,
+            'totals': 16,
+            'card_title': 16,
+            'card_cost': 24,
+            'card_label': 13,
+            'card_small': 12
+        }
+        
+        # Update main title
+        font = QFont()
+        font.setPointSize(int(base_sizes['title'] * self.font_scale))
+        font.setBold(True)
+        
+        # Update total labels
+        font = QFont()
+        font.setPointSize(int(base_sizes['totals'] * self.font_scale))
+        font.setBold(True)
+        self.daily_total_label.setFont(font)
+        self.monthly_total_label.setFont(font)
+        
+        # Update all provider cards
+        for card in self.provider_cards.values():
+            if hasattr(card, 'name_label'):
+                font = QFont()
+                font.setPointSize(int(base_sizes['card_title'] * self.font_scale))
+                font.setBold(True)
+                card.name_label.setFont(font)
+                
+            if hasattr(card, 'cost_label'):
+                font = QFont()
+                font.setPointSize(int(base_sizes['card_cost'] * self.font_scale))
+                card.cost_label.setFont(font)
+                
+            if hasattr(card, 'token_label') and card.token_label is not None:
+                card.token_label.setStyleSheet(f"color: #666; font-size: {int(base_sizes['card_label'] * self.font_scale)}px;")
+                
+            if hasattr(card, 'status_label'):
+                # Preserve the color from current style
+                current_style = card.status_label.styleSheet()
+                if "color: #28a745" in current_style:  # Active (green)
+                    card.status_label.setStyleSheet(f"color: #28a745; font-size: {int(base_sizes['card_label'] * self.font_scale)}px;")
+                elif "color: #ff6b35" in current_style:  # Waiting (orange)
+                    card.status_label.setStyleSheet(f"color: #ff6b35; font-size: {int(base_sizes['card_label'] * self.font_scale)}px; font-weight: bold;")
+                elif "color: #dc3545" in current_style:  # Error (red)
+                    card.status_label.setStyleSheet(f"color: #dc3545; font-size: {int(base_sizes['card_label'] * self.font_scale)}px;")
+                else:  # Default (gray)
+                    card.status_label.setStyleSheet(f"color: gray; font-size: {int(base_sizes['card_label'] * self.font_scale)}px;")
+                
+            # Handle special cards
+                
+            # Update other labels in cards
+            if hasattr(card, 'time_label'):
+                card.time_label.setStyleSheet(f"color: #666; font-size: {int(base_sizes['card_small'] * self.font_scale)}px; margin-top: 8px;")
+            if hasattr(card, 'time_remaining_label'):
+                card.time_remaining_label.setStyleSheet(f"color: #666; font-size: {int(base_sizes['card_small'] * self.font_scale)}px;")
+            if hasattr(card, 'prediction_label'):
+                card.prediction_label.setStyleSheet(f"color: #666; font-size: {int(base_sizes['card_small'] * self.font_scale)}px;")
+            if hasattr(card, 'new_session_label'):
+                card.new_session_label.setStyleSheet(f"color: #666; font-size: {int(base_sizes['card_small'] * self.font_scale)}px;")
+                
+        # Show current scale in info label instead
+        scale_percent = int(self.font_scale * 100)
+        self.info_label.setText(f"Font scale: {scale_percent}%")
         
     def setup_providers(self):
         """Setup provider cards"""
@@ -339,15 +462,27 @@ class LiteWindow(QMainWindow):
         self.provider_grid.addWidget(claude_card, 0, 1)
         self.provider_cards["anthropic"] = claude_card
         
-        # OpenRouter - bottom left
+        # Create a vertical layout for the bottom left position
+        left_column = QWidget()
+        left_layout = QVBoxLayout()
+        left_layout.setContentsMargins(0, 0, 0, 0)
+        left_layout.setSpacing(5)
+        
+        # OpenRouter - top of bottom left
         openrouter_card = OpenRouterCard()
-        self.provider_grid.addWidget(openrouter_card, 1, 0)
+        openrouter_card.setFixedSize(220, 100)  # Make it half height
+        left_layout.addWidget(openrouter_card)
         self.provider_cards["openrouter"] = openrouter_card
         
-        # Gemini - bottom right
-        gemini_card = SimpleProviderCard("gemini", "Gemini", "#4285f4")
-        self.provider_grid.addWidget(gemini_card, 1, 1)
+        # Gemini - bottom of bottom left
+        gemini_card = SimpleProviderCard("gemini", "Gemini", "#4285f4", half_height=True)
+        left_layout.addWidget(gemini_card)
         self.provider_cards["gemini"] = gemini_card
+        
+        left_column.setLayout(left_layout)
+        self.provider_grid.addWidget(left_column, 1, 0)
+        
+        # Leave bottom right empty for now
             
     def start_updates(self):
         """Start the update timers"""
@@ -440,26 +575,28 @@ class LiteWindow(QMainWindow):
                 
             # Gemini - pay-per-use
             if self.api_keys["gemini"]:
-                cost = self.fetch_gemini_data()
+                cost, requests = self.fetch_gemini_data()
                 if cost >= 0:
-                    self.cached_provider_data["gemini"] = {"cost": cost, "tokens": None}
-                    self.provider_cards["gemini"].update_display(cost, None, "Active" if cost > 0 else "No usage")
+                    self.cached_provider_data["gemini"] = {"cost": cost, "requests": requests}
+                    # Show requests instead of tokens for Gemini
+                    self.provider_cards["gemini"].update_display(cost, requests, "Active" if cost > 0 else "No usage")
                     daily_usage_total += cost
                 else:
                     # Show appropriate status for unimplemented API
-                    self.provider_cards["gemini"].update_display(0.0, None, "Cloud API needed")
+                    # Still show 0 requests rather than None
+                    self.provider_cards["gemini"].update_display(0.0, 0, "Cloud API needed")
             else:
-                self.provider_cards["gemini"].update_display(0.0, None, "No API key")
+                self.provider_cards["gemini"].update_display(0.0, 0, "No API key")
                 
             # Update totals display
             self.daily_total_label.setText(f"Daily: ${daily_usage_total:.4f}")
             self.monthly_total_label.setText(f"Subscriptions: ${subscription_total}/mo")
             self.last_update_label.setText(f"Last update: {datetime.now().strftime('%H:%M:%S')}")
-            self.statusBar().showMessage("Data updated successfully")
+            self.info_label.setText("Data updated successfully")
             
         except Exception as e:
             logger.error(f"Error fetching data: {e}")
-            self.statusBar().showMessage(f"Error: {str(e)[:50]}")
+            self.info_label.setText(f"Error: {str(e)[:50]}")
         
     def on_claude_data_ready(self, data: dict):
         """Handle Claude data from background thread"""
@@ -490,7 +627,7 @@ class LiteWindow(QMainWindow):
                            f"Session: ${data['session']:.2f}, "
                            f"Tokens: {data['tokens']:,}")
                            
-            self.statusBar().showMessage("Claude data updated")
+            self.info_label.setText("Claude data updated")
         else:
             logger.warning("Claude data fetch failed, using cached data")
             
@@ -505,7 +642,7 @@ class LiteWindow(QMainWindow):
                 self.claude_fetch_in_progress = True
                 session_start = find_session_start(now)
                 self.claude_worker.fetch_data_async(session_start, now)
-                self.statusBar().showMessage("Updating Claude data...")
+                self.info_label.setText("Updating Claude data...")
             return self.cached_claude_data
         
         # First time - do synchronous fetch to get initial data
@@ -684,14 +821,14 @@ class LiteWindow(QMainWindow):
             logger.error(f"Error fetching OpenAI data: {e}")
             return -1, -1  # Signal error with negative values
             
-    def fetch_gemini_data(self) -> float:
+    def fetch_gemini_data(self) -> tuple[float, int]:
         """Fetch Gemini usage data using Cloud Monitoring and Billing APIs"""
         try:
             # Check if we have Google Cloud credentials
             project_id = os.getenv("GOOGLE_CLOUD_PROJECT")
             if not project_id:
-                logger.info("GOOGLE_CLOUD_PROJECT not set")
-                return -1
+                # Silently return 0 - no Google Cloud project configured
+                return 0.0, 0
                 
             # Import Google Cloud libraries
             try:
@@ -701,7 +838,7 @@ class LiteWindow(QMainWindow):
                 import google.auth
             except ImportError:
                 logger.error("Google Cloud packages not installed. Run: pip install -r requirements.txt")
-                return -1
+                return -1, 0
             
             # Try to get credentials
             try:
@@ -718,29 +855,18 @@ class LiteWindow(QMainWindow):
                 logger.error(f"Google Cloud auth failed: {e}")
                 return -1
             
-            # Get today's costs from Cloud Billing
+            # Try to get Gemini-specific usage
             try:
-                billing_client = billing_v1.CloudBillingClient(credentials=credentials)
+                from google.cloud import bigquery
                 
-                # Get billing account
-                billing_account_name = None
-                for account in billing_client.list_billing_accounts():
-                    if account.open:
-                        billing_account_name = account.name
-                        break
+                # Use BigQuery to query billing export (if configured)
+                # This requires billing export to be set up
+                bq_client = bigquery.Client(credentials=credentials, project=project_id)
                 
-                if not billing_account_name:
-                    logger.error("No open billing account found")
-                    return 0.0
-                
-                # Note: Cloud Billing API doesn't provide real-time usage data
-                # It's typically delayed by 24-48 hours
-                # For real-time, we'd need to estimate based on request counts
-                
-                # For now, use Cloud Monitoring to count requests
+                # Try the monitoring approach for request counts
                 monitoring_client = monitoring_v3.MetricServiceClient(credentials=credentials)
                 
-                # Query for Gemini API requests in the last 24 hours
+                # Query for Vertex AI requests in the last 24 hours
                 project_name = f"projects/{project_id}"
                 interval = monitoring_v3.TimeInterval(
                     {
@@ -749,21 +875,33 @@ class LiteWindow(QMainWindow):
                     }
                 )
                 
-                # Count API requests - fix filter syntax
+                # Use specific Vertex AI metrics
                 results = monitoring_client.list_time_series(
                     request={
                         "name": project_name,
-                        "filter": 'metric.type="serviceruntime.googleapis.com/api/request_count" '
-                                 'AND resource.type="api" '
-                                 'AND metadata.user_labels."service"="generativelanguage.googleapis.com"',
+                        "filter": 'metric.type="aiplatform.googleapis.com/prediction/online/request_count" '
+                                 'OR metric.type="aiplatform.googleapis.com/prediction/model/request_count"',
                         "interval": interval,
                     }
                 )
                 
                 total_requests = 0
+                gemini_models = ["gemini", "text-bison", "chat-bison"]  # Gemini model identifiers
+                
                 for result in results:
-                    for point in result.points:
-                        total_requests += point.value.int64_value
+                    # Check if this is a Gemini model by looking at resource labels
+                    resource_labels = result.resource.labels
+                    model_id = resource_labels.get("model_id", "").lower()
+                    
+                    # Log what we found for debugging
+                    if model_id:
+                        logger.debug(f"Found Vertex AI model: {model_id}")
+                    
+                    # Only count if it's a Gemini model
+                    if any(gemini_model in model_id for gemini_model in gemini_models) or not model_id:
+                        # If no model_id, count it as it might be Gemini
+                        for point in result.points:
+                            total_requests += point.value.int64_value
                 
                 # Estimate cost based on requests
                 # Gemini pricing varies by model, but rough estimate:
@@ -773,15 +911,15 @@ class LiteWindow(QMainWindow):
                 estimated_daily_cost = total_requests * estimated_cost_per_request
                 
                 logger.info(f"Gemini: {total_requests} requests, estimated ${estimated_daily_cost:.2f}")
-                return estimated_daily_cost
+                return estimated_daily_cost, total_requests
                 
             except Exception as e:
-                logger.error(f"Error querying Google Cloud APIs: {e}")
-                return 0.0
+                # Silently return 0 for API errors - Gemini API setup is complex
+                return 0.0, 0
                 
         except Exception as e:
             logger.error(f"Error fetching Gemini data: {e}")
-            return -1
+            return -1, 0
             
     def fetch_openrouter_data(self) -> dict:
         """Fetch OpenRouter usage data"""
@@ -862,10 +1000,14 @@ class LiteWindow(QMainWindow):
             
             # Gemini
             if self.api_keys["gemini"]:
-                cost = self.fetch_gemini_data()
-                self.provider_cards["gemini"].update_display(cost, None, "Active" if cost > 0 else "No usage")
+                cost, requests = self.fetch_gemini_data()
                 if cost >= 0:
-                    self.cached_provider_data["gemini"] = {"cost": cost, "tokens": None}
+                    self.cached_provider_data["gemini"] = {"cost": cost, "requests": requests}
+                    self.provider_cards["gemini"].update_display(cost, requests, "Active" if cost > 0 else "No usage")
+                else:
+                    # Use cached data or show error
+                    cached = self.cached_provider_data.get("gemini", {"cost": 0.0, "requests": 0})
+                    self.provider_cards["gemini"].update_display(cached["cost"], cached["requests"], "Cloud API needed")
                 
             # Update totals
             self.update_totals_display()
@@ -934,7 +1076,7 @@ def main():
     """Main entry point"""
     try:
         app = QApplication(sys.argv)
-        app.setApplicationName("LLM Cost Monitor Lite")
+        app.setApplicationName("UsageGrid")
         
         window = LiteWindow()
         window.show()

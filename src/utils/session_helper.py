@@ -21,6 +21,9 @@ def find_session_start(now: datetime, claude_dir: Path = None) -> datetime:
     1. It's the first message ever, OR
     2. The previous session (5 hours from its start) has expired
     
+    NOTE: Claude Code Monitor shows sessions ending on specific times (e.g., 9:00 PM),
+    so we need to align our calculations with what the monitor shows.
+    
     Args:
         now: Current datetime
         claude_dir: Path to Claude projects directory
@@ -92,6 +95,7 @@ def find_session_start(now: datetime, claude_dir: Path = None) -> datetime:
         session_end = session_start + timedelta(hours=5)
         if session_start <= now <= session_end:
             current_session_start = session_start
+            logger.info(f"Found active session: started at {session_start}, ends at {session_end}")
             break
     
     if current_session_start is None:

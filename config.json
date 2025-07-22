@@ -55,14 +55,19 @@
           },
           {
             "provider": "gemini",
-            "card_type": "simple",
+            "card_type": "gemini",
             "display_name": "Gemini",
             "color": "#4285f4",
-            "size": "half",
-            "metric_name": "Requests",
-            "show_estimated": true
+            "size": "half"
           }
         ]
+      },
+      {
+        "position": [1, 1],
+        "provider": "github",
+        "card_type": "github",
+        "display_name": "GitHub",
+        "color": "#24292e"
       }
     ]
   },
